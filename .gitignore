@@ -1,0 +1,42 @@
+# Go build artifacts
+/bin/
+/build/
+/dist/
+/out/
+/*.exe
+/*.exe~
+/*.dll
+/*.so
+/*.dylib
+/*.test
+*.out
+
+# Go vendor directory (if not using Go modules)
+/vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories (remove the comment below if you use Go modules)
+# /pkg/mod/
+
+# VSCode settings
+.vscode/
+.history/
+*.code-workspace
+
+# VSCode extension state
+*.db
+
+# Docker files
+*.env
+docker-compose.override.yml
+.docker/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
