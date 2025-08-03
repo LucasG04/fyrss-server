@@ -71,3 +71,14 @@ func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) er
 	}
 	return nil
 }
+
+func (r *ArticleRepository) DeleteOneWeekOldArticles(ctx context.Context) error {
+	query := `
+		DELETE FROM articles
+		WHERE published_at < NOW() - INTERVAL '1 week'`
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to delete old articles: %w", err)
+	}
+	return nil
+}

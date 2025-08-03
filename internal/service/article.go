@@ -46,6 +46,14 @@ func (s *ArticleService) GetAllUniqueTags(ctx context.Context) ([]string, error)
 	return tags, nil
 }
 
+func (s *ArticleService) DeleteOneWeekOldArticles(ctx context.Context) error {
+	err := s.repo.DeleteOneWeekOldArticles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete articles older than one week: %w", err)
+	}
+	return nil
+}
+
 func (s *ArticleService) Save(ctx context.Context, article *model.Article) error {
 	if article == nil {
 		return fmt.Errorf("article cannot be nil")

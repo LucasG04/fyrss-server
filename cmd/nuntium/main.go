@@ -41,7 +41,9 @@ func main() {
 	rssReader := service.NewRssArticleReader(articleService)
 
 	runMigrations(databaseUrl)
-	startReadingRssFeeds(rssReader, articleService)
+	go startReadingRssFeeds(rssReader, articleService)
+	go startDeleteOldArticlesJob(articleService)
+
 	startServer(articleService)
 }
 
@@ -82,6 +84,9 @@ func runMigrations(dbUrl string) {
 
 func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService) {
 	feedUrlString := os.Getenv("RSS_FEED_URLS")
+	if feedUrlString == "" {
+		log.Fatal("RSS_FEED_URLS environment variable is not set")
+	}
 	feedUrls := strings.Split(feedUrlString, ",")
 	intervalInMs := os.Getenv("RSS_FEED_INTERVAL_MS")
 	if intervalInMs == "" {
@@ -94,20 +99,24 @@ func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *s
 
 	fmt.Printf("Starting RSS feed reader with interval: %d ms and feeds: %v\n", interval, feedUrls)
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	defer ticker.Stop()
-	go processRssFeeds(rssReader, articleService, feedUrls) // Initial processing before starting the ticker
-	go func() {
-		for range ticker.C {
-			processRssFeeds(rssReader, articleService, feedUrls)
-		}
-	}()
+
+	processRssFeeds(rssReader, articleService, feedUrls) // Initial processing before starting the ticker
+	for range ticker.C {
+		processRssFeeds(rssReader, articleService, feedUrls)
+	}
 }
 
 func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedUrls []string) {
 	skippedDuplicates := 0
 	savedArticles := 0
+	// TODO: add parallel processing for feeds
 	for _, feedUrl := range feedUrls {
-		articles, err := rssReader.ReadArticleFeed(context.Background(), feedUrl)
+		// cancel article read after 30 seconds to avoid blocking
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		articles, err := rssReader.ReadArticleFeed(ctx, feedUrl)
+
 		if err != nil {
 			log.Printf("Error reading RSS feed from %s: %v\n", feedUrl, err)
 			return
@@ -129,4 +138,18 @@ func processRssFeeds(rssReader *service.RssArticleReader, articleService *servic
 		log.Printf("Skipped %d duplicate articles\n", skippedDuplicates)
 	}
 	fmt.Printf("Finished processing RSS feeds. Saved %d new articles.\n", savedArticles)
+}
+
+func startDeleteOldArticlesJob(articleService *service.ArticleService) {
+	interval := 24 * time.Hour // Default to 24 hours
+	ticker := time.NewTicker(interval)
+
+	for range ticker.C {
+		err := articleService.DeleteOneWeekOldArticles(context.Background())
+		if err != nil {
+			log.Printf("Error deleting old articles: %v\n", err)
+		} else {
+			log.Println("Deleted articles older than one week")
+		}
+	}
 }
