@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/lucasg04/nuntium/internal/service"
 )
@@ -24,13 +23,11 @@ func (h *ArticleHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(articles)
+	jsonResponse(w, articles)
 }
 
 func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idParam)
+	id, err := getRequestParamUUID(r)
 	if err != nil {
 		http.Error(w, "Invalid article ID", http.StatusBadRequest)
 		return
@@ -42,6 +39,15 @@ func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jsonResponse(w, article)
+}
+
+func jsonResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(article)
+	json.NewEncoder(w).Encode(data)
+}
+
+func getRequestParamUUID(r *http.Request) (uuid.UUID, error) {
+	idParam := r.URL.Query().Get("id")
+	return uuid.Parse(idParam)
 }

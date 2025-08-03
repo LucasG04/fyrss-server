@@ -40,3 +40,34 @@ func (r *ArticleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.A
 	}
 	return &article, nil
 }
+
+func (r *ArticleRepository) GetAllUniqueTags(ctx context.Context) (tags []string, err error) {
+	query := "SELECT DISTINCT unnest(tags) AS tag FROM articles"
+	err = r.db.SelectContext(ctx, &tags, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all unique tags: %w", err)
+	}
+	return tags, nil
+}
+
+func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string) (bool, error) {
+	query := "SELECT COUNT(*) FROM articles WHERE content_hash = $1"
+	var count int
+	err := r.db.GetContext(ctx, &count, query, contentHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to check for duplicate article: %w", err)
+	}
+	return count > 0, nil
+}
+
+func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) error {
+	query := `
+		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, tags, published_at, last_read_at, save)
+		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :tags, :published_at, :last_read_at, :save)
+		ON CONFLICT (id) DO NOTHING`
+	_, err := r.db.NamedExecContext(ctx, query, article)
+	if err != nil {
+		return fmt.Errorf("failed to save article: %w", err)
+	}
+	return nil
+}
