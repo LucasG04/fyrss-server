@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -41,6 +42,51 @@ func (r *ArticleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.A
 	return &article, nil
 }
 
+func (r *ArticleRepository) GetAllSortedByRecent(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
+	var defaultNilTime time.Time
+	query := `
+		SELECT id, published_at, priority
+		FROM articles
+		WHERE last_read_at = $1
+		ORDER BY published_at DESC, id DESC`
+	var articles []*model.MinimalFeedArticle
+	err := r.db.SelectContext(ctx, &articles, query, defaultNilTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all articles sorted by recent: %w", err)
+	}
+	// Ensure empty slice, not nil, if no results
+	if articles == nil {
+		articles = []*model.MinimalFeedArticle{}
+	}
+	return articles, nil
+}
+
+func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*model.Article, error) {
+	if len(ids) == 0 {
+		return make(map[uuid.UUID]*model.Article), nil
+	}
+
+	query, args, err := sqlx.In("SELECT * FROM articles WHERE id IN (?)", ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare query for article IDs: %w", err)
+	}
+	query = r.db.Rebind(query)
+
+	var articles []*model.Article
+	err = r.db.SelectContext(ctx, &articles, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get articles by IDs: %w", err)
+	}
+
+	// Convert slice to map to provide fast lookup
+	articleMap := make(map[uuid.UUID]*model.Article, len(articles))
+	for _, article := range articles {
+		articleMap[article.ID] = article
+	}
+
+	return articleMap, nil
+}
+
 func (r *ArticleRepository) GetAllUniqueTags(ctx context.Context) (tags []string, err error) {
 	query := "SELECT DISTINCT unnest(tags) AS tag FROM articles"
 	err = r.db.SelectContext(ctx, &tags, query)
@@ -62,8 +108,8 @@ func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string)
 
 func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) error {
 	query := `
-		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, tags, published_at, last_read_at, save)
-		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :tags, :published_at, :last_read_at, :save)
+		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, priority, tags, published_at, last_read_at, save)
+		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :priority, :tags, :published_at, :last_read_at, :save)
 		ON CONFLICT (id) DO NOTHING`
 	_, err := r.db.NamedExecContext(ctx, query, article)
 	if err != nil {

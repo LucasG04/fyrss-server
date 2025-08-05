@@ -8,6 +8,7 @@ CREATE TABLE articles (
     content_hash VARCHAR(64) NOT NULL UNIQUE,
     source_url TEXT NOT NULL,
     source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('rss', 'scraped')),
+    priority INT NOT NULL DEFAULT 0 CHECK (priority >= 0 AND priority <= 5),
     tags TEXT[] DEFAULT '{}',
     published_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     last_read_at TIMESTAMP WITH TIME ZONE,

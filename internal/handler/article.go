@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/lucasg04/nuntium/internal/service"
@@ -42,6 +43,23 @@ func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, article)
 }
 
+func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
+	from, errFrom := getRequestParamInt(r, "from")
+	to, errTo := getRequestParamInt(r, "to")
+	if errFrom != nil || errTo != nil || from < 0 || to < 0 || from >= to {
+		http.Error(w, "Invalid range parameters", http.StatusBadRequest)
+		return
+	}
+
+	articles, err := h.svc.GetFeedPaginated(r.Context(), from, to)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, articles)
+}
+
 func jsonResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
@@ -50,4 +68,12 @@ func jsonResponse(w http.ResponseWriter, data any) {
 func getRequestParamUUID(r *http.Request) (uuid.UUID, error) {
 	idParam := r.URL.Query().Get("id")
 	return uuid.Parse(idParam)
+}
+
+func getRequestParamInt(r *http.Request, param string) (int, error) {
+	value := r.URL.Query().Get(param)
+	if value == "" {
+		return -1, nil // Return -1 if the parameter is not provided
+	}
+	return strconv.Atoi(value)
 }
