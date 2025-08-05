@@ -138,6 +138,14 @@ func (s *ArticleService) DeleteOneWeekOldArticles(ctx context.Context) error {
 	return nil
 }
 
+func (s *ArticleService) GetHistory(ctx context.Context) ([]*model.Article, error) {
+	articles, err := s.repo.GetHistory(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get article history: %w", err)
+	}
+	return articles, nil
+}
+
 func (s *ArticleService) Save(ctx context.Context, article *model.Article) error {
 	if article == nil {
 		return fmt.Errorf("article cannot be nil")

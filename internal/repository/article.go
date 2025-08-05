@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -43,14 +42,13 @@ func (r *ArticleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.A
 }
 
 func (r *ArticleRepository) GetAllSortedByRecent(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
-	var defaultNilTime time.Time
 	query := `
 		SELECT id, published_at, priority
 		FROM articles
 		WHERE last_read_at = $1
 		ORDER BY published_at DESC, id DESC`
 	var articles []*model.MinimalFeedArticle
-	err := r.db.SelectContext(ctx, &articles, query, defaultNilTime)
+	err := r.db.SelectContext(ctx, &articles, query, model.DefaultNilTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all articles sorted by recent: %w", err)
 	}
@@ -85,6 +83,24 @@ func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (map[
 	}
 
 	return articleMap, nil
+}
+
+func (r *ArticleRepository) GetHistory(ctx context.Context) ([]*model.Article, error) {
+	query := `
+		SELECT *
+		FROM articles
+		WHERE last_read_at != $1
+		ORDER BY published_at DESC`
+	var articles []*model.Article
+	err := r.db.SelectContext(ctx, &articles, query, model.DefaultNilTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get article history: %w", err)
+	}
+	// Ensure empty slice, not nil, if no results
+	if articles == nil {
+		articles = []*model.Article{}
+	}
+	return articles, nil
 }
 
 func (r *ArticleRepository) GetAllUniqueTags(ctx context.Context) (tags []string, err error) {

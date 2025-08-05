@@ -60,6 +60,16 @@ func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, articles)
 }
 
+func (h *ArticleHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
+	articles, err := h.svc.GetHistory(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, articles)
+}
+
 func jsonResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)

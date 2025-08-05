@@ -9,6 +9,8 @@ import (
 
 const PriorityUnknown = 0
 
+var DefaultNilTime time.Time
+
 type Article struct {
 	ID          uuid.UUID `json:"id" db:"id"`
 	Title       string    `json:"title" db:"title"`
