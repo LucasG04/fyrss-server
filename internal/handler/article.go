@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -44,10 +45,9 @@ func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
-	from, errFrom := getRequestParamInt(r, "from")
-	to, errTo := getRequestParamInt(r, "to")
-	if errFrom != nil || errTo != nil || from < 0 || to < 0 || from >= to {
-		http.Error(w, "Invalid range parameters", http.StatusBadRequest)
+	from, to, err := getPaginationParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -61,13 +61,52 @@ func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ArticleHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
-	articles, err := h.svc.GetHistory(r.Context())
+	from, to, err := getPaginationParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	articles, err := h.svc.GetHistoryPaginated(r.Context(), from, to)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	jsonResponse(w, articles)
+}
+
+func (h *ArticleHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
+	from, to, err := getPaginationParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	articles, err := h.svc.GetSavedPaginated(r.Context(), from, to)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, articles)
+}
+
+func getPaginationParams(r *http.Request) (int, int, error) {
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+
+	if fromStr == "" || toStr == "" {
+		return 0, 0, fmt.Errorf("missing pagination parameters: from=%s, to=%s", fromStr, toStr)
+	}
+
+	from, errFrom := strconv.Atoi(fromStr)
+	to, errTo := strconv.Atoi(toStr)
+	if errFrom != nil || errTo != nil || from < 0 || to <= from {
+		return 0, 0, fmt.Errorf("invalid pagination parameters: from=%s, to=%s", fromStr, toStr)
+	}
+
+	return from, to, nil
 }
 
 func jsonResponse(w http.ResponseWriter, data any) {

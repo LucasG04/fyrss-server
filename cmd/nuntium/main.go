@@ -68,6 +68,7 @@ func setupArticleHttpHandler(articleService *service.ArticleService) {
 	http.HandleFunc("/api/articles/", articleHandler.GetByID)
 	http.HandleFunc("/api/articles/feed", articleHandler.GetFeed)
 	http.HandleFunc("/api/articles/history", articleHandler.GetHistory)
+	http.HandleFunc("/api/articles/saved", articleHandler.GetSaved)
 }
 
 func runMigrations(dbUrl string) {

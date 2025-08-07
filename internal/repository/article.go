@@ -85,20 +85,38 @@ func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (map[
 	return articleMap, nil
 }
 
-func (r *ArticleRepository) GetHistory(ctx context.Context) ([]*model.Article, error) {
+func (r *ArticleRepository) GetFullHistorySorted(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
 	query := `
-		SELECT *
+		SELECT id, published_at, priority
 		FROM articles
 		WHERE last_read_at != $1
-		ORDER BY published_at DESC`
-	var articles []*model.Article
+		ORDER BY last_read_at DESC, id DESC`
+	var articles []*model.MinimalFeedArticle
 	err := r.db.SelectContext(ctx, &articles, query, model.DefaultNilTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get article history: %w", err)
 	}
 	// Ensure empty slice, not nil, if no results
 	if articles == nil {
-		articles = []*model.Article{}
+		articles = []*model.MinimalFeedArticle{}
+	}
+	return articles, nil
+}
+
+func (r *ArticleRepository) GetAllSavedSorted(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
+	query := `
+		SELECT id, published_at, priority
+		FROM articles
+		WHERE save = true
+		ORDER BY published_at DESC, id DESC`
+	var articles []*model.MinimalFeedArticle
+	err := r.db.SelectContext(ctx, &articles, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get saved articles: %w", err)
+	}
+	// Ensure empty slice, not nil, if no results
+	if articles == nil {
+		articles = []*model.MinimalFeedArticle{}
 	}
 	return articles, nil
 }

@@ -56,32 +56,14 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 	if len(fullFeed) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
-	if from < 0 || to > len(fullFeed) {
-		return nil, fmt.Errorf("invalid range: from %d to %d exceeds feed length %d", from, to, len(fullFeed))
-	}
 
 	sortedFeed := SortFeedArticles(fullFeed)
 
-	// Get Ids of articles in the specified range
-	ids := make([]uuid.UUID, to-from)
-	for _, article := range sortedFeed[from:to] {
-		ids = append(ids, article.ID)
-	}
-	// Fetch articles by IDs
-	fullArticlesMap, err := s.repo.GetByIDs(ctx, ids)
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get articles by IDs: %v", err)
+		return nil, fmt.Errorf("failed to get full articles from minimal feed: %w", err)
 	}
-
-	// Restore original order
-	articles := make([]*model.Article, 0, len(sortedFeed))
-	for _, feedItem := range sortedFeed {
-		if article, exists := fullArticlesMap[feedItem.ID]; exists {
-			articles = append(articles, article)
-		}
-	}
-
-	return articles, nil
+	return fullArticles, nil
 }
 
 func SortFeedArticles(articles []*model.MinimalFeedArticle) []*model.MinimalFeedArticle {
@@ -138,12 +120,66 @@ func (s *ArticleService) DeleteOneWeekOldArticles(ctx context.Context) error {
 	return nil
 }
 
-func (s *ArticleService) GetHistory(ctx context.Context) ([]*model.Article, error) {
-	articles, err := s.repo.GetHistory(ctx)
+func (s *ArticleService) GetHistoryPaginated(ctx context.Context, from, to int) ([]*model.Article, error) {
+	articles, err := s.repo.GetFullHistorySorted(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get article history: %w", err)
 	}
-	return articles, nil
+
+	if len(articles) == 0 {
+		return []*model.Article{}, nil // Return empty slice if no articles found
+	}
+
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get full articles from minimal history: %w", err)
+	}
+	return fullArticles, nil
+}
+
+func (s *ArticleService) GetSavedPaginated(ctx context.Context, from, to int) ([]*model.Article, error) {
+	articles, err := s.repo.GetAllSavedSorted(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get saved articles: %w", err)
+	}
+
+	if len(articles) == 0 {
+		return []*model.Article{}, nil // Return empty slice if no articles found
+	}
+
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get full articles from minimal saved: %w", err)
+	}
+	return fullArticles, nil
+}
+
+func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []*model.MinimalFeedArticle) ([]*model.Article, error) {
+	if len(articles) == 0 {
+		return []*model.Article{}, nil // Return empty slice if no articles provided
+	}
+
+	// Extract IDs from minimal articles
+	ids := make([]uuid.UUID, len(articles))
+	for i, article := range articles {
+		ids[i] = article.ID
+	}
+
+	// Fetch full articles by IDs
+	fullArticlesMap, err := s.repo.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get full articles by minimal articles: %w", err)
+	}
+
+	// Restore original order
+	fullArticles := make([]*model.Article, 0, len(articles))
+	for _, article := range articles {
+		if fullArticle, exists := fullArticlesMap[article.ID]; exists {
+			fullArticles = append(fullArticles, fullArticle)
+		}
+	}
+
+	return fullArticles, nil
 }
 
 func (s *ArticleService) Save(ctx context.Context, article *model.Article) error {
