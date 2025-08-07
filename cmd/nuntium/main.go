@@ -64,10 +64,10 @@ func startServer(articleService *service.ArticleService) {
 func setupArticleHttpHandler(articleService *service.ArticleService) {
 	articleHandler := handler.NewArticleHandler(articleService)
 
-	http.HandleFunc("/api/v1/articles", articleHandler.GetAll)
-	http.HandleFunc("/api/v1/articles/", articleHandler.GetByID)
-	http.HandleFunc("/api/v1/articles/feed", articleHandler.GetFeed)
-	http.HandleFunc("/api/v1/articles/history", articleHandler.GetHistory)
+	http.HandleFunc("/api/articles", articleHandler.GetAll)
+	http.HandleFunc("/api/articles/", articleHandler.GetByID)
+	http.HandleFunc("/api/articles/feed", articleHandler.GetFeed)
+	http.HandleFunc("/api/articles/history", articleHandler.GetHistory)
 }
 
 func runMigrations(dbUrl string) {
