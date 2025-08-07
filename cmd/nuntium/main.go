@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/lucasg04/nuntium/internal/handler"
@@ -48,7 +50,16 @@ func main() {
 }
 
 func startServer(articleService *service.ArticleService) {
-	setupArticleHttpHandler(articleService)
+	r := chi.NewRouter()
+
+	// A good base middleware stack
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	setupArticleHttpHandler(r, articleService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -56,19 +67,24 @@ func startServer(articleService *service.ArticleService) {
 	}
 	fmt.Printf("Server starting on port %s\n", port)
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal("Server failed to start:", err)
 	}
 }
 
-func setupArticleHttpHandler(articleService *service.ArticleService) {
+func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService) {
 	articleHandler := handler.NewArticleHandler(articleService)
 
-	http.HandleFunc("/api/articles", articleHandler.GetAll)
-	http.HandleFunc("/api/articles/", articleHandler.GetByID)
-	http.HandleFunc("/api/articles/feed", articleHandler.GetFeed)
-	http.HandleFunc("/api/articles/history", articleHandler.GetHistory)
-	http.HandleFunc("/api/articles/saved", articleHandler.GetSaved)
+	r.Route("/api/articles", func(r chi.Router) {
+		r.Get("/", articleHandler.GetAll)
+		r.Get("/feed", articleHandler.GetFeed)
+		r.Get("/history", articleHandler.GetHistory)
+		r.Get("/saved", articleHandler.GetSaved)
+
+		r.Get("/{id}", articleHandler.GetByID)
+		r.Patch("/{id}/saved", articleHandler.UpdateSavedByID)
+		r.Patch("/{id}/read", articleHandler.UpdateReadByID)
+	})
 }
 
 func runMigrations(dbUrl string) {

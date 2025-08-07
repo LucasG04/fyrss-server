@@ -182,6 +182,30 @@ func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []
 	return fullArticles, nil
 }
 
+func (s *ArticleService) UpdateSavedByID(ctx context.Context, id uuid.UUID, saved bool) error {
+	if id == uuid.Nil {
+		return fmt.Errorf("invalid article ID: %s", id)
+	}
+
+	err := s.repo.UpdateSavedByID(ctx, id, saved)
+	if err != nil {
+		return fmt.Errorf("failed to update saved status for article ID %s: %w", id, err)
+	}
+	return nil
+}
+
+func (s *ArticleService) UpdateReadByID(ctx context.Context, id uuid.UUID) error {
+	if id == uuid.Nil {
+		return fmt.Errorf("invalid article ID: %s", id)
+	}
+
+	err := s.repo.UpdateReadByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to update read status for article ID %s: %w", id, err)
+	}
+	return nil
+}
+
 func (s *ArticleService) Save(ctx context.Context, article *model.Article) error {
 	if article == nil {
 		return fmt.Errorf("article cannot be nil")

@@ -162,3 +162,27 @@ func (r *ArticleRepository) DeleteOneWeekOldArticles(ctx context.Context) error 
 	}
 	return nil
 }
+
+func (r *ArticleRepository) UpdateSavedByID(ctx context.Context, id uuid.UUID, saved bool) error {
+	query := `
+		UPDATE articles
+		SET save = $2
+		WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id, saved)
+	if err != nil {
+		return fmt.Errorf("failed to update saved status for article %s: %w", id, err)
+	}
+	return nil
+}
+
+func (r *ArticleRepository) UpdateReadByID(ctx context.Context, id uuid.UUID) error {
+	query := `
+		UPDATE articles
+		SET last_read_at = NOW()
+		WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to update read status for article %s: %w", id, err)
+	}
+	return nil
+}
