@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 
 	"github.com/openai/openai-go/v2"
 )
@@ -15,12 +16,16 @@ func NewAiService(client *openai.Client) *AiService {
 }
 
 func (a *AiService) Generate(ctx context.Context, systemPrompt string, prompt string) (string, error) {
+	model := openai.ChatModel(os.Getenv("OPENAI_CHAT_MODEL"))
+	if model == "" {
+		model = openai.ChatModelGPT5Nano
+	}
 	chatCompletion, err := a.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(prompt),
 		},
-		Model: openai.ChatModelGPT5Nano,
+		Model: model,
 	})
 	if err != nil {
 		return "", err
