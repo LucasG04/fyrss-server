@@ -59,7 +59,7 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 
 	sortedFeed := SortFeedArticles(fullFeed)
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed)
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed[from:to])
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal feed: %w", err)
 	}
@@ -130,7 +130,7 @@ func (s *ArticleService) GetHistoryPaginated(ctx context.Context, from, to int) 
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles)
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to])
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal history: %w", err)
 	}
@@ -147,7 +147,7 @@ func (s *ArticleService) GetSavedPaginated(ctx context.Context, from, to int) ([
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles)
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to])
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal saved: %w", err)
 	}
