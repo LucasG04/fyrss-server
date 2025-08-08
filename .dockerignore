@@ -1,0 +1,28 @@
+# Build artifacts
+**/bin/
+**/dist/
+**/out/
+**/*.exe
+**/*.test
+**/*.prof
+
+# Git
+.git
+.gitignore
+
+# Node/Frontend leftovers
+node_modules
+
+# Editor/OS files
+.vscode
+.idea
+.DS_Store
+
+# Local env files and secrets (mounted at runtime instead if needed)
+.env*
+!.env.example
+
+# Docker metadata
+Dockerfile*
+
+db/init

@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/lucasg04/fyrss/internal/service"
+	"github.com/lucasg04/fyrss-server/internal/service"
 )
 
 type ArticleHandler struct {

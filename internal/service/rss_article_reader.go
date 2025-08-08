@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/lucasg04/fyrss/internal/model"
+	"github.com/lucasg04/fyrss-server/internal/model"
 	"github.com/mmcdole/gofeed"
 )
 

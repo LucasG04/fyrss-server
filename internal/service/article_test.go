@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lucasg04/fyrss/internal/model"
+	"github.com/lucasg04/fyrss-server/internal/model"
 )
 
 func TestSortFeedArticles(t *testing.T) {

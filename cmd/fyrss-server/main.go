@@ -14,9 +14,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/lucasg04/fyrss/internal/handler"
-	"github.com/lucasg04/fyrss/internal/repository"
-	"github.com/lucasg04/fyrss/internal/service"
+	"github.com/lucasg04/fyrss-server/internal/handler"
+	"github.com/lucasg04/fyrss-server/internal/repository"
+	"github.com/lucasg04/fyrss-server/internal/service"
 	"github.com/openai/openai-go/v2"
 
 	"github.com/golang-migrate/migrate/v4"
