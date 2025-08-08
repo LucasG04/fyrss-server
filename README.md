@@ -14,24 +14,14 @@ A Go backend for automated curation of news and blog articles via RSS and web sc
 
 ## ENV Configuration
 
-| Variable              | Description                          |
-| --------------------- | ------------------------------------ |
-| `SCRAPER_RSS_FEEDS`   | Comma-separated list of RSS URLs     |
-| `SCRAPER_RAW_URLS`    | Comma-separated list of website URLs |
-| `OPENAI_API_KEY`      | API key for GPT categorization       |
-| `DATABASE_URL`        | PostgreSQL connection URL            |
-| `SCRAPE_INTERVAL_MIN` | Scraping interval in minutes         |
-
-## REST API
-
-Base route: `/api`
-
-| Method | Route                | Description                          |
-| ------ | -------------------- | ------------------------------------ |
-| GET    | `/api/articles`      | Returns all articles                 |
-| GET    | `/api/articles/:id`  | Returns a single article             |
-| GET    | `/api/articles/feed` | Returns a filtered feed              |
-| POST   | `/api/trigger`       | Manually triggers a scraping process |
+| Variable               | Description                              |
+| ---------------------- | ---------------------------------------- |
+| `RSS_FEED_URLS`        | Comma-separated list of RSS URLs         |
+| `RSS_FEED_INTERVAL_MS` | Scraping interval in minutes             |
+| `DATABASE_URL`         | PostgreSQL connection URL                |
+| `PORT`                 | Port for the REST API server             |
+| `OPENAI_CHAT_MODEL`    | OpenAI GPT model name for categorization |
+| `OPENAI_API_KEY`       | OpenAI API key for LLM-based features    |
 
 ## Docker Setup (recommended)
 
