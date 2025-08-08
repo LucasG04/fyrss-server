@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/lucasg04/nuntium/internal/model"
+	"github.com/lucasg04/fyrss/internal/model"
 )
 
 type ArticleRepository struct {

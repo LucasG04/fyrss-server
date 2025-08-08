@@ -1,4 +1,4 @@
-module github.com/lucasg04/nuntium
+module github.com/lucasg04/fyrss
 
 go 1.24.5
 

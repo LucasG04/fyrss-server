@@ -1,16 +1,16 @@
 services:
   postgres:
-    container_name: nuntium_postgres
+    container_name: fyrss_postgres
     image: postgres:17
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changeme
       PGDATA: /data/postgres
     volumes:
-       - db-nuntium:/data/postgres
-       - ./db/init:/docker-entrypoint-initdb.d
+      - db-fyrss:/data/postgres
+      - ./db/init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 
 volumes:
-  db-nuntium:
+  db-fyrss:

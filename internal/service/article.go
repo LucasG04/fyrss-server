@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lucasg04/nuntium/internal/model"
-	"github.com/lucasg04/nuntium/internal/repository"
+	"github.com/lucasg04/fyrss/internal/model"
+	"github.com/lucasg04/fyrss/internal/repository"
 )
 
 var ErrDuplicateArticle = errors.New("duplicate article found")

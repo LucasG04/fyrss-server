@@ -1,1 +1,1 @@
-CREATE DATABASE nuntium;
+CREATE DATABASE fyrss;

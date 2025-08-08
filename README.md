@@ -1,4 +1,4 @@
-# Nuntium
+# ForYou RSS Server
 
 A Go backend for automated curation of news and blog articles via RSS and web scraping. Content is categorized, prioritized, and made accessible via a REST API. The backend is fully stateless and uses an external database (e.g., PostgreSQL in a container).
 
