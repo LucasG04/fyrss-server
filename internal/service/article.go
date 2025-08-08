@@ -242,8 +242,18 @@ func (s *ArticleService) determineTags(ctx context.Context, item *model.Article)
 	}
 
 	// 2) use AI to generate tags based on the item
-	systemPrompt := "You are an expert in categorizing news articles. Your task is to assign 1–3 very general, high-level tags (like topic categories or news sections) to each article. Use only tags from this predefined list: " + fmt.Sprintf("%v", tags) + ". If no tags apply, generate 1–3 new general tags. Important: The tags must be written in the same language as the article (e.g., 'Politik' for German, 'Politics' for English). Do not translate. Respond strictly as a JSON object. Do not include any text or markdown. Tags must be written in the same language as the article (e.g., use German tags for German articles)."
-	prompt := "Title: '" + item.Title + "' Description: '" + item.Description + "'\nReturn a plain JSON object like: '{\"tags\": [\"tag1\", \"tag2\"]}' No other output. No markdown. Only JSON."
+	systemPrompt := `You are an expert in categorizing news articles.
+Assign 1–3 high-level, general tags (broad topics or news sections) to the article.
+Use only tags from this list: ` + fmt.Sprintf("%v", tags) + `.
+If none apply, create 1–3 new general tags.
+
+Rules:
+- Tags must be in the article's original language (do not translate).
+- No specific events or names; keep tags broad (e.g., "Politics" not "US Election").
+- Return ONLY a valid JSON object: {"tags": ["tag1", "tag2"]}
+- No text, notes, or formatting outside the JSON.
+- Invalid output is not allowed.`
+	prompt := "Title: " + item.Title + "\nDescription: " + item.Description
 	response, err := s.aiService.Generate(ctx, systemPrompt, prompt)
 	if err != nil {
 		fmt.Printf("Error generating tags: %v\n", err)
@@ -268,14 +278,17 @@ func readJsonTags(response string) ([]string, error) {
 }
 
 func (s *ArticleService) determinePriority(ctx context.Context, article *model.Article) (int, error) {
-	systemPrompt := `You are an expert news analyst. Your task is to assess the public importance of a news article based on its title and description. Rate its importance on a scale from 1 to 5, where:
-		1 = Very important (national impact, breaking news, major events)
-		2 = Important (significant developments, policy decisions, large public interest)
-		3 = Moderate (niche relevance, regional importance, medium impact)
-		4 = Low importance (minor updates, limited audience)
-		5 = Very unimportant (celebrity gossip, clickbait, trivial matters)
-		Consider societal impact, urgency, and relevance. Respond with a single JSON object only, like: {"priority": 2}
-		Do not include any text, explanation, or markdown. Only return the JSON.`
+	systemPrompt := `You are an expert news analyst.
+Rate the public importance of a news article from 1–5:
+1 = Very important - national impact, breaking news, major events
+2 = Important - significant developments, policy decisions, large public interest
+3 = Moderate - niche relevance, regional importance, medium impact
+4 = Low importance - minor updates, limited audience
+5 = Very unimportant - celebrity gossip, clickbait, trivial matters
+
+Consider: societal impact, urgency, relevance.
+Return ONLY: {"priority": <number>}  
+No extra words, notes, or formatting. Invalid output is not allowed.`
 	prompt := "Title: " + article.Title + "\nDescription: " + article.Description
 	response, err := s.aiService.Generate(ctx, systemPrompt, prompt)
 	if err != nil {
