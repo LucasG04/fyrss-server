@@ -17,7 +17,7 @@ import (
 	"github.com/lucasg04/nuntium/internal/handler"
 	"github.com/lucasg04/nuntium/internal/repository"
 	"github.com/lucasg04/nuntium/internal/service"
-	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/v2"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"

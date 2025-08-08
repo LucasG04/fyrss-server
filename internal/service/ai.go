@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/v2"
 )
 
 type AiService struct {
@@ -20,7 +20,7 @@ func (a *AiService) Generate(ctx context.Context, systemPrompt string, prompt st
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(prompt),
 		},
-		Model: openai.ChatModelGPT4_1Mini,
+		Model: openai.ChatModelGPT5Nano,
 	})
 	if err != nil {
 		return "", err
