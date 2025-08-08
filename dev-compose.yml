@@ -11,6 +11,18 @@ services:
       - ./db/init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
+  # fyrss-server:
+  #   container_name: fyrss_server
+  #   image: fyrss-server:latest
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - postgres
+  #   env_file:
+  #     - .env.dev
+  #     - .env.secrets
+  #   environment:
+  #     - DATABASE_URL=postgres://postgres:changeme@postgres:5432/fyrss?sslmode=disable
 
 volumes:
   db-fyrss:
