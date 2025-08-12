@@ -121,15 +121,6 @@ func (r *ArticleRepository) GetAllSavedSorted(ctx context.Context) ([]*model.Min
 	return articles, nil
 }
 
-func (r *ArticleRepository) GetAllUniqueTags(ctx context.Context) (tags []string, err error) {
-	query := "SELECT DISTINCT unnest(tags) AS tag FROM articles"
-	err = r.db.SelectContext(ctx, &tags, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get all unique tags: %w", err)
-	}
-	return tags, nil
-}
-
 func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string) (bool, error) {
 	query := "SELECT COUNT(*) FROM articles WHERE content_hash = $1"
 	var count int

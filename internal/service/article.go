@@ -16,12 +16,13 @@ import (
 var ErrDuplicateArticle = errors.New("duplicate article found")
 
 type ArticleService struct {
-	repo      repository.ArticleRepository
-	aiService *AiService
+	repo       *repository.ArticleRepository
+	tagService *TagService
+	aiService  *AiService
 }
 
-func NewArticleService(repo *repository.ArticleRepository, aiService *AiService) *ArticleService {
-	return &ArticleService{repo: *repo, aiService: aiService}
+func NewArticleService(repo *repository.ArticleRepository, tagService *TagService, aiService *AiService) *ArticleService {
+	return &ArticleService{repo: repo, tagService: tagService, aiService: aiService}
 }
 
 func (s *ArticleService) GetAll(ctx context.Context) ([]*model.Article, error) {
@@ -38,14 +39,6 @@ func (s *ArticleService) GetByID(ctx context.Context, id uuid.UUID) (*model.Arti
 		return nil, fmt.Errorf("failed to get article with ID %s: %w", id, err)
 	}
 	return article, nil
-}
-
-func (s *ArticleService) GetAllUniqueTags(ctx context.Context) ([]string, error) {
-	tags, err := s.repo.GetAllUniqueTags(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get all unique tags: %w", err)
-	}
-	return tags, nil
 }
 
 func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]*model.Article, error) {
@@ -221,10 +214,7 @@ func (s *ArticleService) Save(ctx context.Context, article *model.Article) error
 	}
 
 	article.Tags = s.determineTags(ctx, article)
-	article.Priority, err = s.determinePriority(ctx, article)
-	if err != nil {
-		fmt.Printf("failed to determine article priority: %v\n", err)
-	}
+	article.Priority = model.PriorityUnknown
 
 	err = s.repo.Save(ctx, article)
 	if err != nil {
@@ -235,7 +225,7 @@ func (s *ArticleService) Save(ctx context.Context, article *model.Article) error
 
 func (s *ArticleService) determineTags(ctx context.Context, item *model.Article) []string {
 	// 1) get current tags from db
-	tags, err := s.GetAllUniqueTags(ctx)
+	tags, err := s.tagService.GetAll(ctx)
 	if err != nil {
 		fmt.Printf("Error getting unique tags: %v\n", err)
 		return []string{}
@@ -275,43 +265,4 @@ func readJsonTags(response string) ([]string, error) {
 		return nil, fmt.Errorf("failed to unmarshal JSON response: %w", err)
 	}
 	return result.Tags, nil
-}
-
-func (s *ArticleService) determinePriority(ctx context.Context, article *model.Article) (int, error) {
-	systemPrompt := `You are an expert news analyst.
-Rate the public importance of a news article from 1–5:
-1 = Very important - national impact, breaking news, major events
-2 = Important - significant developments, policy decisions, large public interest
-3 = Moderate - niche relevance, regional importance, medium impact
-4 = Low importance - minor updates, limited audience
-5 = Very unimportant - celebrity gossip, clickbait, trivial matters
-
-Consider: societal impact, urgency, relevance.
-Return ONLY: {"priority": <number>}  
-No extra words, notes, or formatting. Invalid output is not allowed.`
-	prompt := "Title: " + article.Title + "\nDescription: " + article.Description
-	response, err := s.aiService.Generate(ctx, systemPrompt, prompt)
-	if err != nil {
-		fmt.Printf("Error generating priority: %v\n", err)
-		return model.PriorityUnknown, fmt.Errorf("failed to generate priority: %w", err)
-	}
-	priority, err := readJsonPriority(response)
-	if err != nil {
-		fmt.Printf("Error reading JSON priority: %v\n", err)
-		return model.PriorityUnknown, fmt.Errorf("failed to read priority from JSON: %w", err)
-	}
-	return priority, nil
-}
-
-func readJsonPriority(response string) (int, error) {
-	var result struct {
-		Priority int `json:"priority"`
-	}
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return model.PriorityUnknown, fmt.Errorf("failed to unmarshal JSON response: %w", err)
-	}
-	if result.Priority < 1 || result.Priority > 5 {
-		return model.PriorityUnknown, fmt.Errorf("priority must be between 1 and 5, got %d", result.Priority)
-	}
-	return result.Priority, nil
 }

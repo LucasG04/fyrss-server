@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/lucasg04/fyrss-server/internal/handlerutil"
 	"github.com/lucasg04/fyrss-server/internal/service"
 )
 
@@ -26,11 +26,11 @@ func (h *ArticleHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, articles)
+	handlerutil.JsonResponse(w, articles)
 }
 
 func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := getRequestParamUUID(r)
+	id, err := handlerutil.GetRequestParamUUID(r)
 	if err != nil {
 		http.Error(w, "Invalid article ID", http.StatusBadRequest)
 		return
@@ -42,7 +42,7 @@ func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, article)
+	handlerutil.JsonResponse(w, article)
 }
 
 func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, articles)
+	handlerutil.JsonResponse(w, articles)
 }
 
 func (h *ArticleHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func (h *ArticleHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, articles)
+	handlerutil.JsonResponse(w, articles)
 }
 
 func (h *ArticleHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func (h *ArticleHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, articles)
+	handlerutil.JsonResponse(w, articles)
 }
 
 func (h *ArticleHandler) UpdateSavedByID(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +101,7 @@ func (h *ArticleHandler) UpdateSavedByID(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	saved, err := getRequestParamBool(r, "saved")
+	saved, err := handlerutil.GetRequestParamBool(r, "saved")
 	if err != nil {
 		http.Error(w, "Invalid saved parameter", http.StatusBadRequest)
 		return
@@ -148,30 +148,4 @@ func getPaginationParams(r *http.Request) (int, int, error) {
 	}
 
 	return from, to, nil
-}
-
-func jsonResponse(w http.ResponseWriter, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
-}
-
-func getRequestParamUUID(r *http.Request) (uuid.UUID, error) {
-	idParam := r.URL.Query().Get("id")
-	return uuid.Parse(idParam)
-}
-
-func getRequestParamInt(r *http.Request, param string) (int, error) {
-	value := r.URL.Query().Get(param)
-	if value == "" {
-		return -1, nil // Return -1 if the parameter is not provided
-	}
-	return strconv.Atoi(value)
-}
-
-func getRequestParamBool(r *http.Request, param string) (bool, error) {
-	value := r.URL.Query().Get(param)
-	if value == "" {
-		return false, nil // Return false if the parameter is not provided
-	}
-	return strconv.ParseBool(value)
 }

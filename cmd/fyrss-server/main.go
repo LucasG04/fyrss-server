@@ -38,18 +38,20 @@ func main() {
 	// Initialize services
 	openAiClient := openai.NewClient() // retrieving api key defaults to os.LookupEnv("OPENAI_API_KEY")
 	aiService := service.NewAiService(&openAiClient)
+	tagRepo := repository.NewTagRepository(db)
+	tagService := service.NewTagService(tagRepo)
 	articleRepo := repository.NewArticleRepository(db)
-	articleService := service.NewArticleService(articleRepo, aiService)
+	articleService := service.NewArticleService(articleRepo, tagService, aiService)
 	rssReader := service.NewRssArticleReader(articleService)
 
 	runMigrations(databaseUrl)
 	go startReadingRssFeeds(rssReader, articleService)
 	go startDeleteOldArticlesJob(articleService)
 
-	startServer(articleService)
+	startServer(articleService, tagService)
 }
 
-func startServer(articleService *service.ArticleService) {
+func startServer(articleService *service.ArticleService, tagService *service.TagService) {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -60,6 +62,7 @@ func startServer(articleService *service.ArticleService) {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	setupArticleHttpHandler(r, articleService)
+	setupTagHttpHandler(r, tagService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -84,6 +87,17 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 		r.Get("/{id}", articleHandler.GetByID)
 		r.Patch("/{id}/saved", articleHandler.UpdateSavedByID)
 		r.Patch("/{id}/read", articleHandler.UpdateReadByID)
+	})
+}
+
+func setupTagHttpHandler(r *chi.Mux, tagService *service.TagService) {
+	tagHandler := handler.NewTagHandler(tagService)
+
+	r.Route("/api/tags", func(r chi.Router) {
+		r.Get("/", tagHandler.GetAll)
+		r.Get("/weight", tagHandler.GetTagsWithWeights)
+		r.Put("/weight", tagHandler.SetTagWeight)
+		r.Delete("/weight", tagHandler.RemoveTagWeight)
 	})
 }
 
