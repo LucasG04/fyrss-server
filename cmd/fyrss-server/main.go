@@ -95,7 +95,7 @@ func setupTagHttpHandler(r *chi.Mux, tagService *service.TagService) {
 
 	r.Route("/api/tags", func(r chi.Router) {
 		r.Get("/", tagHandler.GetAll)
-		r.Put("/{id}", tagHandler.UpdateTag)
+		r.Put("/", tagHandler.UpdateTag)
 	})
 }
 

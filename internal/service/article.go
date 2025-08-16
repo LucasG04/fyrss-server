@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -61,6 +62,9 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 }
 
 func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model.MinimalFeedArticle) []*model.MinimalFeedArticle {
+	if len(articles) == 0 {
+		return []*model.MinimalFeedArticle{}
+	}
 	now := time.Now()
 
 	type scored struct {
@@ -68,67 +72,78 @@ func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model
 		score float64
 	}
 
+	// Batch fetch tags to avoid N+1 queries
+	tagMap, err := s.tagService.GetTagsOfArticles(ctx, articles)
+	if err != nil {
+		// Fallback: continue without tag influence
+		tagMap = map[uuid.UUID][]*model.Tag{}
+	}
+
+	// Tunable parameters
+	const (
+		halfLifeHours = 24.0
+		descIdealMin  = 80
+		descIdealMax  = 300
+		wTag          = 0.4
+		wRecency      = 0.4
+		wDesc         = 0.2
+	)
+
 	items := make([]scored, 0, len(articles))
 	for _, a := range articles {
 		if a == nil {
 			continue
 		}
 
-		tags, err := s.tagService.GetTagsOfArticle(ctx, a.ID)
-		if err != nil {
-			continue
-		}
-
-		// Tag score: sum of weights for tags present in the article
-		tagScore := 0
+		tags := tagMap[a.ID]
+		var priorityCount float64
 		for _, t := range tags {
 			if t.Priority {
-				tagScore += 100 // TODO Check Weights
+				priorityCount += 1
 			}
 		}
+		// Compress impact of many priority tags (0..~1)
+		tagScore := math.Tanh(priorityCount)
 
-		// Description score: normalized by a cap to avoid dominating
-		descLen := len(strings.TrimSpace(a.Description))
-		descScore := float64(descLen)
-		if descScore > 500 {
-			descScore = 500
-		}
-		descScore = descScore / 500.0 // 0..1
-
-		// Recency score: newer articles get a higher score
+		// Recency exponential decay (0..1)
 		var recencyScore float64
-		if !a.PublishedAt.IsZero() {
-			ageHours := now.Sub(a.PublishedAt).Hours()
-			if ageHours < 0 {
-				ageHours = 0 // guard against clock skew / future dates
-			}
-			recencyScore = 1 / (1 + ageHours/24) // ~1 today, ~0.5 after 24h, decreasing over time
-		} else {
-			recencyScore = 0
+		ageHours := now.Sub(a.PublishedAt).Hours()
+		if ageHours < 0 {
+			ageHours = 0
+		}
+		recencyScore = math.Exp(-ageHours / halfLifeHours)
+
+		// Description score: encourage medium length, penalize extremes
+		descLen := len(strings.TrimSpace(a.Description))
+		var descScore float64
+		switch {
+		case descLen < descIdealMin:
+			descScore = (float64(descLen) / float64(descIdealMin)) * 0.7
+		case descLen <= descIdealMax:
+			descScore = 1
+		default:
+			overflow := float64(descLen - descIdealMax)
+			descScore = 1 / (1 + overflow/400) // saturating penalty
 		}
 
-		// Final score: emphasize tag weights, then recency, then description
-		total := float64(tagScore)*10.0 + recencyScore*2.0 + descScore*1.0
+		total := wTag*tagScore + wRecency*recencyScore + wDesc*descScore
 		items = append(items, scored{art: a, score: total})
 	}
 
-	// Stable sort by descending score; tie-break by newer publish time, then longer description
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].score == items[j].score {
 			if !items[i].art.PublishedAt.Equal(items[j].art.PublishedAt) {
 				return items[i].art.PublishedAt.After(items[j].art.PublishedAt)
 			}
-			if len(items[i].art.Description) != len(items[j].art.Description) {
-				return len(items[i].art.Description) > len(items[j].art.Description)
-			}
-			return false
+			// Deterministic fallback by ID
+			return items[i].art.ID.String() > items[j].art.ID.String()
 		}
 		return items[i].score > items[j].score
 	})
 
-	out := make([]*model.MinimalFeedArticle, 0, len(items))
-	for _, it := range items {
-		out = append(out, it.art)
+	out := make([]*model.MinimalFeedArticle, len(items))
+	for i, item := range items {
+		out[i] = item.art
 	}
 	return out
 }
@@ -268,10 +283,15 @@ func (s *ArticleService) determineTags(ctx context.Context, item *model.Article)
 		return []string{}
 	}
 
+	tagNames := make([]string, len(tags))
+	for i, tag := range tags {
+		tagNames[i] = tag.Name
+	}
+
 	// 2) use AI to generate tags based on the item
 	systemPrompt := `You are an expert in categorizing news articles.
 Assign 1–3 high-level, general tags (broad topics or news sections) to the article.
-Use only tags from this list: ` + fmt.Sprintf("%v", tags) + `.
+Use only tags from this list: ` + fmt.Sprintf("%v", tagNames) + `.
 If none apply, create 1–3 new general tags.
 
 Rules:
@@ -286,12 +306,12 @@ Rules:
 		fmt.Printf("Error generating tags: %v\n", err)
 		return []string{}
 	}
-	tags, err = readJsonTags(response)
+	tagNames, err = readJsonTags(response)
 	if err != nil {
 		fmt.Printf("Error reading JSON tags: %v\n", err)
 		return []string{}
 	}
-	return tags
+	return tagNames
 }
 
 func readJsonTags(response string) ([]string, error) {

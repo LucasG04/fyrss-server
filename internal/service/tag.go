@@ -20,12 +20,8 @@ func NewTagService(repo *repository.TagRepository) *TagService {
 	return &TagService{repo: *repo}
 }
 
-func (s *TagService) GetAll(ctx context.Context) ([]string, error) {
+func (s *TagService) GetAll(ctx context.Context) ([]*model.Tag, error) {
 	return s.repo.GetAllTags(ctx)
-}
-
-func (s *TagService) GetTagsOfArticle(ctx context.Context, articleID uuid.UUID) ([]*model.Tag, error) {
-	return s.repo.GetTagsOfArticle(ctx, articleID)
 }
 
 func (s *TagService) GetTagByID(ctx context.Context, id uuid.UUID) (*model.Tag, error) {
@@ -78,4 +74,23 @@ func (s *TagService) AssignTagsToArticle(ctx context.Context, articleID uuid.UUI
 		return fmt.Errorf("assign tags to article %q: %w", articleID, err)
 	}
 	return nil
+}
+
+// GetTagsOfArticles returns a map[articleID][]*model.Tag for a slice of minimal articles.
+func (s *TagService) GetTagsOfArticles(ctx context.Context, articles []*model.MinimalFeedArticle) (map[uuid.UUID][]*model.Tag, error) {
+	ids := make([]uuid.UUID, 0, len(articles))
+	for _, a := range articles {
+		if a != nil {
+			ids = append(ids, a.ID)
+		}
+	}
+	rows, err := s.repo.GetTagsByArticleIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[uuid.UUID][]*model.Tag, len(ids))
+	for _, r := range rows {
+		res[r.ArticleID] = append(res[r.ArticleID], &model.Tag{ID: r.ID, Name: r.Name, Priority: r.Priority})
+	}
+	return res, nil
 }

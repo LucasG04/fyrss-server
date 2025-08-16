@@ -18,12 +18,12 @@ func NewTagRepository(db *sqlx.DB) *TagRepository {
 	return &TagRepository{db: db}
 }
 
-// GetAllTags returns all tag names from normalized tags table
-func (t *TagRepository) GetAllTags(ctx context.Context) (tags []string, err error) {
-	query := "SELECT name FROM tags ORDER BY name"
+// GetAllTags returns all tags from normalized tags table
+func (t *TagRepository) GetAllTags(ctx context.Context) (tags []*model.Tag, err error) {
+	query := "SELECT * FROM tags ORDER BY name"
 	err = t.db.SelectContext(ctx, &tags, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get all unique tags: %w", err)
+		return nil, fmt.Errorf("failed to get all tags: %w", err)
 	}
 	return tags, nil
 }
@@ -60,15 +60,6 @@ func (t *TagRepository) GetByName(ctx context.Context, name string) (*model.Tag,
 	return &tag, nil
 }
 
-func (t *TagRepository) GetTagsOfArticle(ctx context.Context, articleID uuid.UUID) ([]*model.Tag, error) {
-	query := "SELECT t.* FROM tags t INNER JOIN article_tags at ON t.id = at.tag_id WHERE at.article_id = $1"
-	var tags []*model.Tag
-	if err := t.db.SelectContext(ctx, &tags, query, articleID); err != nil {
-		return nil, fmt.Errorf("failed to get tags for article %q: %w", articleID, err)
-	}
-	return tags, nil
-}
-
 func (t *TagRepository) CreateTag(ctx context.Context, name string) (tag *model.Tag, err error) {
 	query := "INSERT INTO tags (id, name, priority) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING"
 	tagId := uuid.New()
@@ -95,4 +86,31 @@ func (t *TagRepository) AssignTagsToArticle(ctx context.Context, articleID uuid.
 		}
 	}
 	return nil
+}
+
+// GetTagsByArticleIDs fetches tags for multiple articles in a single round trip.
+// Returns a flattened list (article_id, tag fields).
+func (t *TagRepository) GetTagsByArticleIDs(ctx context.Context, articleIDs []uuid.UUID) ([]*model.TagWithArticleID, error) {
+	if len(articleIDs) == 0 {
+		return []*model.TagWithArticleID{}, nil
+	}
+
+	query, args, err := sqlx.In(`
+		SELECT at.article_id, tg.id, tg.name, tg.priority
+		FROM article_tags at
+		INNER JOIN tags tg ON tg.id = at.tag_id
+		WHERE at.article_id IN (?)
+	`, articleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build batch tag query: %w", err)
+	}
+	query = t.db.Rebind(query)
+	var rows []*model.TagWithArticleID
+	if err := t.db.SelectContext(ctx, &rows, query, args...); err != nil {
+		return nil, fmt.Errorf("failed to fetch tags for articles: %w", err)
+	}
+	if rows == nil {
+		return []*model.TagWithArticleID{}, nil
+	}
+	return rows, nil
 }
