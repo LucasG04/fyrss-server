@@ -95,9 +95,7 @@ func setupTagHttpHandler(r *chi.Mux, tagService *service.TagService) {
 
 	r.Route("/api/tags", func(r chi.Router) {
 		r.Get("/", tagHandler.GetAll)
-		r.Get("/weight", tagHandler.GetTagsWithWeights)
-		r.Put("/weight", tagHandler.SetTagWeight)
-		r.Delete("/weight", tagHandler.RemoveTagWeight)
+		r.Put("/{id}", tagHandler.UpdateTag)
 	})
 }
 

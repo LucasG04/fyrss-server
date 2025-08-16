@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,7 +51,7 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
 
-	sortedFeed := SortFeedArticles(fullFeed)
+	sortedFeed := s.SortFeedArticles(ctx, fullFeed)
 
 	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed[from:to])
 	if err != nil {
@@ -59,50 +60,77 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 	return fullArticles, nil
 }
 
-func SortFeedArticles(articles []*model.MinimalFeedArticle) []*model.MinimalFeedArticle {
-	// 1) group articles in 12h blocks
-	var grouped [][]*model.MinimalFeedArticle
-	var currentBlock []*model.MinimalFeedArticle
-	blockStart := articles[0].PublishedAt
+func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model.MinimalFeedArticle) []*model.MinimalFeedArticle {
+	now := time.Now()
 
-	for _, article := range articles {
-		if blockStart.Sub(article.PublishedAt) > 12*time.Hour {
-			grouped = append(grouped, currentBlock)
-			currentBlock = []*model.MinimalFeedArticle{}
-			blockStart = article.PublishedAt
+	type scored struct {
+		art   *model.MinimalFeedArticle
+		score float64
+	}
+
+	items := make([]scored, 0, len(articles))
+	for _, a := range articles {
+		if a == nil {
+			continue
 		}
-		currentBlock = append(currentBlock, article)
-	}
-	if len(currentBlock) > 0 {
-		grouped = append(grouped, currentBlock)
-	}
 
-	// 2) sort articles by priority and publishedAt
-	for _, block := range grouped {
-		slices.SortFunc(block, func(a, b *model.MinimalFeedArticle) int {
-			// sort unknown priorities to the end
-			if a.Priority == model.PriorityUnknown {
-				return 1
+		tags, err := s.tagService.GetTagsOfArticle(ctx, a.ID)
+		if err != nil {
+			continue
+		}
+
+		// Tag score: sum of weights for tags present in the article
+		tagScore := 0
+		for _, t := range tags {
+			if t.Priority {
+				tagScore += 100 // TODO Check Weights
 			}
-			if b.Priority == model.PriorityUnknown {
-				return -1
-			}
+		}
 
-			// sort by priority first, then by PublishedAt
-			if a.Priority != b.Priority {
-				return a.Priority - b.Priority
+		// Description score: normalized by a cap to avoid dominating
+		descLen := len(strings.TrimSpace(a.Description))
+		descScore := float64(descLen)
+		if descScore > 500 {
+			descScore = 500
+		}
+		descScore = descScore / 500.0 // 0..1
+
+		// Recency score: newer articles get a higher score
+		var recencyScore float64
+		if !a.PublishedAt.IsZero() {
+			ageHours := now.Sub(a.PublishedAt).Hours()
+			if ageHours < 0 {
+				ageHours = 0 // guard against clock skew / future dates
 			}
-			return b.PublishedAt.Compare(a.PublishedAt)
-		})
+			recencyScore = 1 / (1 + ageHours/24) // ~1 today, ~0.5 after 24h, decreasing over time
+		} else {
+			recencyScore = 0
+		}
+
+		// Final score: emphasize tag weights, then recency, then description
+		total := float64(tagScore)*10.0 + recencyScore*2.0 + descScore*1.0
+		items = append(items, scored{art: a, score: total})
 	}
 
-	// 3) flatten the grouped articles back to a single slice
-	var sortedArticles []*model.MinimalFeedArticle
-	for _, block := range grouped {
-		sortedArticles = append(sortedArticles, block...)
-	}
+	// Stable sort by descending score; tie-break by newer publish time, then longer description
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].score == items[j].score {
+			if !items[i].art.PublishedAt.Equal(items[j].art.PublishedAt) {
+				return items[i].art.PublishedAt.After(items[j].art.PublishedAt)
+			}
+			if len(items[i].art.Description) != len(items[j].art.Description) {
+				return len(items[i].art.Description) > len(items[j].art.Description)
+			}
+			return false
+		}
+		return items[i].score > items[j].score
+	})
 
-	return sortedArticles
+	out := make([]*model.MinimalFeedArticle, 0, len(items))
+	for _, it := range items {
+		out = append(out, it.art)
+	}
+	return out
 }
 
 func (s *ArticleService) DeleteOneWeekOldArticles(ctx context.Context) error {
@@ -159,9 +187,13 @@ func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []
 	}
 
 	// Fetch full articles by IDs
-	fullArticlesMap, err := s.repo.GetByIDs(ctx, ids)
+	fullUnsortedArticles, err := s.repo.GetByIDs(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles by minimal articles: %w", err)
+	}
+	fullArticlesMap := make(map[uuid.UUID]*model.Article, len(articles))
+	for _, article := range fullUnsortedArticles {
+		fullArticlesMap[article.ID] = article
 	}
 
 	// Restore original order
@@ -213,12 +245,17 @@ func (s *ArticleService) Save(ctx context.Context, article *model.Article) error
 		return ErrDuplicateArticle
 	}
 
-	article.Tags = s.determineTags(ctx, article)
-	article.Priority = model.PriorityUnknown
-
-	err = s.repo.Save(ctx, article)
+	savedArticle, err := s.repo.Save(ctx, article)
 	if err != nil {
 		return fmt.Errorf("failed to save article: %w", err)
+	}
+
+	tags := s.determineTags(ctx, savedArticle)
+	if len(tags) > 0 {
+		err = s.tagService.AssignTagsToArticle(ctx, savedArticle.ID, tags)
+		if err != nil {
+			return fmt.Errorf("failed to assign tags to article: %w", err)
+		}
 	}
 	return nil
 }
