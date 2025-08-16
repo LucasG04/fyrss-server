@@ -30,3 +30,4 @@ ON CONFLICT DO NOTHING;
 
 -- Drop old denormalized column
 ALTER TABLE articles DROP COLUMN IF EXISTS tags;
+ALTER TABLE articles DROP COLUMN IF EXISTS priority;

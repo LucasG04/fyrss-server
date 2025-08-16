@@ -70,9 +70,9 @@ func (t *TagRepository) GetTagsOfArticle(ctx context.Context, articleID uuid.UUI
 }
 
 func (t *TagRepository) CreateTag(ctx context.Context, name string) (tag *model.Tag, err error) {
-	query := "INSERT INTO tags (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"
+	query := "INSERT INTO tags (id, name, priority) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING"
 	tagId := uuid.New()
-	if _, err := t.db.ExecContext(ctx, query, tagId, name); err != nil {
+	if _, err := t.db.ExecContext(ctx, query, tagId, name, false); err != nil {
 		return nil, fmt.Errorf("failed to create tag %q: %w", name, err)
 	}
 	return &model.Tag{ID: tagId, Name: name, Priority: false}, nil

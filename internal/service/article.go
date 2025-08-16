@@ -197,10 +197,10 @@ func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []
 	}
 
 	// Restore original order
-	fullArticles := make([]*model.Article, 0, len(articles))
-	for _, article := range articles {
+	fullArticles := make([]*model.Article, len(articles))
+	for i, article := range articles {
 		if fullArticle, exists := fullArticlesMap[article.ID]; exists {
-			fullArticles = append(fullArticles, fullArticle)
+			fullArticles[i] = fullArticle
 		}
 	}
 
