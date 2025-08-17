@@ -19,6 +19,7 @@ type Article struct {
 	PublishedAt time.Time `json:"publishedAt" db:"published_at"`
 	LastReadAt  time.Time `json:"lastReadAt" db:"last_read_at"`
 	Save        bool      `json:"save" db:"save"`
+	Tags        []string  `json:"tags" db:"-"` // tags of the article, will be populated for the frontend feed
 }
 
 type MinimalFeedArticle struct {

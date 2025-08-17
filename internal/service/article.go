@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -51,17 +52,26 @@ func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]
 	if len(fullFeed) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
+	// adjust from & to params if articles length doesnt match
+	if from < 0 || to > len(fullFeed) || from >= to {
+		from = 0
+		to = len(fullFeed)
+	}
 
-	sortedFeed := s.SortFeedArticles(ctx, fullFeed)
+	tagMap, err := s.GetTagLookupByArticles(ctx, fullFeed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tag lookup by articles: %w", err)
+	}
+	sortedFeed := s.SortFeedArticles(ctx, fullFeed, tagMap)
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed[from:to])
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, sortedFeed[from:to], tagMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal feed: %w", err)
 	}
 	return fullArticles, nil
 }
 
-func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model.MinimalFeedArticle) []*model.MinimalFeedArticle {
+func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model.MinimalFeedArticle, tagMap map[uuid.UUID][]*model.Tag) []*model.MinimalFeedArticle {
 	if len(articles) == 0 {
 		return []*model.MinimalFeedArticle{}
 	}
@@ -70,13 +80,6 @@ func (s *ArticleService) SortFeedArticles(ctx context.Context, articles []*model
 	type scored struct {
 		art   *model.MinimalFeedArticle
 		score float64
-	}
-
-	// Batch fetch tags to avoid N+1 queries
-	tagMap, err := s.tagService.GetTagsOfArticles(ctx, articles)
-	if err != nil {
-		// Fallback: continue without tag influence
-		tagMap = map[uuid.UUID][]*model.Tag{}
 	}
 
 	// Tunable parameters
@@ -165,8 +168,18 @@ func (s *ArticleService) GetHistoryPaginated(ctx context.Context, from, to int) 
 	if len(articles) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
+	// adjust from & to params if articles length doesnt match
+	if from < 0 || to > len(articles) || from >= to {
+		from = 0
+		to = len(articles)
+	}
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to])
+	tagMap, err := s.GetTagLookupByArticles(ctx, articles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tag lookup by articles: %w", err)
+	}
+
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to], tagMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal history: %w", err)
 	}
@@ -182,15 +195,25 @@ func (s *ArticleService) GetSavedPaginated(ctx context.Context, from, to int) ([
 	if len(articles) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
+	// adjust from & to params if articles length doesnt match
+	if from < 0 || to > len(articles) || from >= to {
+		from = 0
+		to = len(articles)
+	}
 
-	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to])
+	tagMap, err := s.GetTagLookupByArticles(ctx, articles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tag lookup by articles: %w", err)
+	}
+
+	fullArticles, err := s.GetArticlesFromMinimal(ctx, articles[from:to], tagMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get full articles from minimal saved: %w", err)
 	}
 	return fullArticles, nil
 }
 
-func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []*model.MinimalFeedArticle) ([]*model.Article, error) {
+func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []*model.MinimalFeedArticle, tagMap map[uuid.UUID][]*model.Tag) ([]*model.Article, error) {
 	if len(articles) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles provided
 	}
@@ -219,6 +242,18 @@ func (s *ArticleService) GetArticlesFromMinimal(ctx context.Context, articles []
 		}
 	}
 
+	// fill tags for json
+	for i, article := range fullArticles {
+		if tags, exists := tagMap[article.ID]; exists {
+			// Convert model.Tag to string slice
+			fullArticles[i].Tags = make([]string, len(tags))
+			for j, tag := range tags {
+				fullArticles[i].Tags[j] = tag.Name
+			}
+			slices.Sort(fullArticles[i].Tags)
+		}
+	}
+
 	return fullArticles, nil
 }
 
@@ -232,6 +267,16 @@ func (s *ArticleService) UpdateSavedByID(ctx context.Context, id uuid.UUID, save
 		return fmt.Errorf("failed to update saved status for article ID %s: %w", id, err)
 	}
 	return nil
+}
+
+func (s *ArticleService) GetTagLookupByArticles(ctx context.Context, articles []*model.MinimalFeedArticle) (map[uuid.UUID][]*model.Tag, error) {
+	// Batch fetch tags to avoid N+1 queries
+	tagMap, err := s.tagService.GetTagsOfArticles(ctx, articles)
+	if err != nil {
+		// Fallback: continue without tag influence
+		tagMap = map[uuid.UUID][]*model.Tag{}
+	}
+	return tagMap, nil
 }
 
 func (s *ArticleService) UpdateReadByID(ctx context.Context, id uuid.UUID) error {
