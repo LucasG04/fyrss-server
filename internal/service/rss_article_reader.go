@@ -36,7 +36,6 @@ func (r *RssArticleReader) ReadArticleFeed(ctx context.Context, feedURL string) 
 			Title:       item.Title,
 			Description: item.Description,
 			ContentHash: generateContentHash(item),
-			Tags:        []string{},
 			SourceUrl:   item.Link,
 			PublishedAt: *item.PublishedParsed,
 			SourceType:  "rss",

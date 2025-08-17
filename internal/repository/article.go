@@ -43,7 +43,7 @@ func (r *ArticleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.A
 
 func (r *ArticleRepository) GetAllSortedByRecent(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
 	query := `
-		SELECT id, published_at, priority
+		SELECT id, description, published_at
 		FROM articles
 		WHERE last_read_at = $1
 		ORDER BY published_at DESC, id DESC`
@@ -59,16 +59,16 @@ func (r *ArticleRepository) GetAllSortedByRecent(ctx context.Context) ([]*model.
 	return articles, nil
 }
 
-func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*model.Article, error) {
+func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Article, error) {
 	if len(ids) == 0 {
-		return make(map[uuid.UUID]*model.Article), nil
+		return []*model.Article{}, nil
 	}
 
 	query, args, err := sqlx.In("SELECT * FROM articles WHERE id IN (?)", ids)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare query for article IDs: %w", err)
 	}
-	query = r.db.Rebind(query)
+	query = r.db.Rebind(query) // rebind because of ? parameter in query
 
 	var articles []*model.Article
 	err = r.db.SelectContext(ctx, &articles, query, args...)
@@ -76,18 +76,12 @@ func (r *ArticleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (map[
 		return nil, fmt.Errorf("failed to get articles by IDs: %w", err)
 	}
 
-	// Convert slice to map to provide fast lookup
-	articleMap := make(map[uuid.UUID]*model.Article, len(articles))
-	for _, article := range articles {
-		articleMap[article.ID] = article
-	}
-
-	return articleMap, nil
+	return articles, nil
 }
 
 func (r *ArticleRepository) GetFullHistorySorted(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
 	query := `
-		SELECT id, published_at, priority
+		SELECT id, description, published_at
 		FROM articles
 		WHERE last_read_at != $1
 		ORDER BY last_read_at DESC, id DESC`
@@ -105,7 +99,7 @@ func (r *ArticleRepository) GetFullHistorySorted(ctx context.Context) ([]*model.
 
 func (r *ArticleRepository) GetAllSavedSorted(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
 	query := `
-		SELECT id, published_at, priority
+		SELECT id, description, published_at
 		FROM articles
 		WHERE save = true
 		ORDER BY published_at DESC, id DESC`
@@ -131,16 +125,31 @@ func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string)
 	return count > 0, nil
 }
 
-func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) error {
+func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) (*model.Article, error) {
 	query := `
-		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, priority, tags, published_at, last_read_at, save)
-		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :priority, :tags, :published_at, :last_read_at, :save)
-		ON CONFLICT (id) DO NOTHING`
-	_, err := r.db.NamedExecContext(ctx, query, article)
+		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, published_at, last_read_at, save)
+		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :published_at, :last_read_at, :save)
+		ON CONFLICT (id) DO NOTHING
+		RETURNING id`
+	var returnedID uuid.UUID
+	rows, err := r.db.NamedQueryContext(ctx, query, article)
 	if err != nil {
-		return fmt.Errorf("failed to save article: %w", err)
+		return nil, fmt.Errorf("failed to save article: %w", err)
 	}
-	return nil
+	defer rows.Close()
+	if rows.Next() {
+		if err := rows.Scan(&returnedID); err != nil {
+			return nil, fmt.Errorf("failed to scan returned id: %w", err)
+		}
+		article.ID = returnedID
+		return article, nil
+	}
+	// If no row was returned, article already existed, fetch and return it
+	existing, err := r.GetByID(ctx, article.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch existing article: %w", err)
+	}
+	return existing, nil
 }
 
 func (r *ArticleRepository) DeleteOneWeekOldArticles(ctx context.Context) error {

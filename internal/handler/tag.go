@@ -25,42 +25,13 @@ func (t *TagHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	handlerutil.JsonResponse(w, tags)
 }
 
-func (t *TagHandler) GetTagsWithWeights(w http.ResponseWriter, r *http.Request) {
-	weightedTags, err := t.service.GetTagsWithWeights(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if weightedTags == nil {
-		weightedTags = make([]*model.WeightedTag, 0)
-	}
-	handlerutil.JsonResponse(w, weightedTags)
-}
-
-func (t *TagHandler) SetTagWeight(w http.ResponseWriter, r *http.Request) {
-	data := &model.WeightedTag{}
+func (t *TagHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
+	data := &model.Tag{}
 	if err := handlerutil.ParseJsonBody(r, data); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := t.service.SetTagWeight(r.Context(), data.Name, data.Weight); err != nil {
-		if err == service.ErrInvalidTag || err == service.ErrInvalidTagWeight {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	handlerutil.JsonResponse(w, nil)
-}
-
-func (t *TagHandler) RemoveTagWeight(w http.ResponseWriter, r *http.Request) {
-	data := &model.WeightedTag{}
-	if err := handlerutil.ParseJsonBody(r, data); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := t.service.RemoveTagWeight(r.Context(), data.Name); err != nil {
+	if err := t.service.UpdateTag(r.Context(), data); err != nil {
 		if err == service.ErrInvalidTag {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

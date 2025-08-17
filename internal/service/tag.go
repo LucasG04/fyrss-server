@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
+	"github.com/google/uuid"
 	"github.com/lucasg04/fyrss-server/internal/model"
 	"github.com/lucasg04/fyrss-server/internal/repository"
 )
 
-var ErrInvalidTagWeight = errors.New("invalid weight")
 var ErrInvalidTag = errors.New("invalid tag")
 
 type TagService struct {
@@ -21,44 +20,70 @@ func NewTagService(repo *repository.TagRepository) *TagService {
 	return &TagService{repo: *repo}
 }
 
-func (s *TagService) GetAll(ctx context.Context) ([]string, error) {
+func (s *TagService) GetAll(ctx context.Context) ([]*model.Tag, error) {
 	return s.repo.GetAllTags(ctx)
 }
 
-func (s *TagService) GetTagsWithWeights(ctx context.Context) ([]*model.WeightedTag, error) {
-	return s.repo.GetTagsWithWeights(ctx)
+func (s *TagService) GetTagByID(ctx context.Context, id uuid.UUID) (*model.Tag, error) {
+	tag, err := s.repo.GetTagByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get tag by ID %q: %w", id, err)
+	}
+	return tag, nil
 }
 
-func (s *TagService) SetTagWeight(ctx context.Context, tag string, weight int) error {
-	tag = strings.TrimSpace(tag)
-	if tag == "" {
+func (s *TagService) UpdateTag(ctx context.Context, tag *model.Tag) error {
+	exists, err := s.repo.ExistsByID(ctx, tag.ID)
+	if err != nil {
+		return fmt.Errorf("check if tag exists %q: %w", tag.ID, err)
+	}
+	if !exists {
 		return ErrInvalidTag
 	}
-	if weight < 0 {
-		return ErrInvalidTagWeight
+	if err := s.repo.UpdateTag(ctx, tag); err != nil {
+		return fmt.Errorf("failed to update for tag %q: %w", tag.ID, err)
 	}
+	return nil
+}
 
-	weightedTag, _ := s.repo.GetWeightedTag(ctx, tag)
-	if weightedTag == nil {
-		if err := s.repo.CreateWeightedTag(ctx, tag, weight); err != nil {
-			return fmt.Errorf("create weight for tag %q: %w", tag, err)
+func (s *TagService) AssignTagsToArticle(ctx context.Context, articleID uuid.UUID, tags []string) error {
+	tagIDs := make([]uuid.UUID, len(tags))
+	for i, t := range tags {
+		tag, err := s.repo.GetByName(ctx, t)
+		if err != nil {
+			return fmt.Errorf("check if tag exists %q: %w", t, err)
 		}
-		return nil
+		if tag == nil {
+			created, err := s.repo.CreateTag(ctx, t)
+			if err != nil {
+				return fmt.Errorf("create tag %q: %w", t, err)
+			}
+			tag = created
+		}
+		tagIDs[i] = tag.ID
 	}
 
-	if err := s.repo.SetTagWeight(ctx, tag, weight); err != nil {
-		return fmt.Errorf("set weight for tag %q: %w", tag, err)
+	if err := s.repo.AssignTagsToArticle(ctx, articleID, tagIDs); err != nil {
+		return fmt.Errorf("assign tags to article %q: %w", articleID, err)
 	}
 	return nil
 }
 
-func (s *TagService) RemoveTagWeight(ctx context.Context, tag string) error {
-	tag = strings.TrimSpace(tag)
-	if tag == "" {
-		return ErrInvalidTag
+// GetTagsOfArticles returns a map[articleID][]*model.Tag for a slice of minimal articles.
+func (s *TagService) GetTagsOfArticles(ctx context.Context, articles []*model.MinimalFeedArticle) (map[uuid.UUID][]*model.Tag, error) {
+	ids := make([]uuid.UUID, 0, len(articles))
+	for _, a := range articles {
+		if a != nil {
+			ids = append(ids, a.ID)
+		}
 	}
-	if err := s.repo.RemoveWeight(ctx, tag); err != nil {
-		return fmt.Errorf("remove weight for tag %q: %w", tag, err)
+	rows, err := s.repo.GetTagsByArticleIDs(ctx, ids)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	res := make(map[uuid.UUID][]*model.Tag, len(ids))
+	for _, r := range rows {
+		res[r.ArticleID] = append(res[r.ArticleID], &model.Tag{ID: r.ID, Name: r.Name, Priority: r.Priority})
+	}
+	return res, nil
 }
