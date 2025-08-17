@@ -61,7 +61,7 @@ func (t *TagRepository) GetByName(ctx context.Context, name string) (*model.Tag,
 }
 
 func (t *TagRepository) CreateTag(ctx context.Context, name string) (tag *model.Tag, err error) {
-	query := "INSERT INTO tags (id, name, priority) VALUES ($1, $2, $3) ON CONFLICT (id, name) DO NOTHING"
+	query := "INSERT INTO tags (id, name, priority) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING"
 	tagId := uuid.New()
 	if _, err := t.db.ExecContext(ctx, query, tagId, name, false); err != nil {
 		return nil, fmt.Errorf("failed to create tag %q: %w", name, err)
