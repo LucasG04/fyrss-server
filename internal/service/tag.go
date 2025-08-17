@@ -32,13 +32,6 @@ func (s *TagService) GetTagByID(ctx context.Context, id uuid.UUID) (*model.Tag, 
 	return tag, nil
 }
 
-func (s *TagService) CreateTag(ctx context.Context, tagId uuid.UUID, name string) error {
-	if _, err := s.repo.CreateTag(ctx, name); err != nil {
-		return fmt.Errorf("create tag %q: %w", tagId, err)
-	}
-	return nil
-}
-
 func (s *TagService) UpdateTag(ctx context.Context, tag *model.Tag) error {
 	exists, err := s.repo.ExistsByID(ctx, tag.ID)
 	if err != nil {
