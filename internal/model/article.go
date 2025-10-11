@@ -19,16 +19,10 @@ type Article struct {
 	PublishedAt time.Time `json:"publishedAt" db:"published_at"`
 	LastReadAt  time.Time `json:"lastReadAt" db:"last_read_at"`
 	Save        bool      `json:"save" db:"save"`
-	Tags        []string  `json:"tags" db:"-"` // tags of the article, will be populated for the frontend feed
 }
 
 type MinimalFeedArticle struct {
 	ID          uuid.UUID `db:"id"`
 	Description string    `db:"description"`
 	PublishedAt time.Time `db:"published_at"`
-}
-
-type ArticleTag struct {
-	ArticleID uuid.UUID `db:"article_id"`
-	TagID     uuid.UUID `db:"tag_id"`
 }

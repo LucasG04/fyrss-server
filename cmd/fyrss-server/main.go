@@ -17,7 +17,6 @@ import (
 	"github.com/lucasg04/fyrss-server/internal/handler"
 	"github.com/lucasg04/fyrss-server/internal/repository"
 	"github.com/lucasg04/fyrss-server/internal/service"
-	"github.com/openai/openai-go/v2"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -36,22 +35,18 @@ func main() {
 	defer db.Close()
 
 	// Initialize services
-	openAiClient := openai.NewClient() // retrieving api key defaults to os.LookupEnv("OPENAI_API_KEY")
-	aiService := service.NewAiService(&openAiClient)
-	tagRepo := repository.NewTagRepository(db)
-	tagService := service.NewTagService(tagRepo)
 	articleRepo := repository.NewArticleRepository(db)
-	articleService := service.NewArticleService(articleRepo, tagService, aiService)
+	articleService := service.NewArticleService(articleRepo)
 	rssReader := service.NewRssArticleReader(articleService)
 
 	runMigrations(databaseUrl)
 	go startReadingRssFeeds(rssReader, articleService)
 	go startDeleteOldArticlesJob(articleService)
 
-	startServer(articleService, tagService)
+	startServer(articleService)
 }
 
-func startServer(articleService *service.ArticleService, tagService *service.TagService) {
+func startServer(articleService *service.ArticleService) {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -62,7 +57,6 @@ func startServer(articleService *service.ArticleService, tagService *service.Tag
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	setupArticleHttpHandler(r, articleService)
-	setupTagHttpHandler(r, tagService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -87,15 +81,6 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 		r.Get("/{id}", articleHandler.GetByID)
 		r.Patch("/{id}/saved", articleHandler.UpdateSavedByID)
 		r.Patch("/{id}/read", articleHandler.UpdateReadByID)
-	})
-}
-
-func setupTagHttpHandler(r *chi.Mux, tagService *service.TagService) {
-	tagHandler := handler.NewTagHandler(tagService)
-
-	r.Route("/api/tags", func(r chi.Router) {
-		r.Get("/", tagHandler.GetAll)
-		r.Put("/", tagHandler.UpdateTag)
 	})
 }
 

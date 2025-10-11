@@ -1,3 +1,4 @@
+# start with `docker-compose -f dev-compose.yml up`
 services:
   postgres:
     container_name: fyrss_postgres

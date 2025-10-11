@@ -5,7 +5,6 @@ A Go backend for automated curation of news and blog articles via RSS. Content i
 ## Features
 
 - Periodic fetching of RSS feeds
-- LLM-based categorization, tagging, and summarization (OpenAI GPT)
 - Duplicate detection via content hash
 - Storage of all content in an external PostgreSQL database
 - REST API for querying, filtering, and displaying content
@@ -14,14 +13,12 @@ A Go backend for automated curation of news and blog articles via RSS. Content i
 
 ## ENV Configuration
 
-| Variable               | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `RSS_FEED_URLS`        | Comma-separated list of RSS URLs         |
-| `RSS_FEED_INTERVAL_MS` | Scraping interval in milliseconds        |
-| `DATABASE_URL`         | PostgreSQL connection URL                |
-| `PORT`                 | Port for the REST API server             |
-| `OPENAI_CHAT_MODEL`    | OpenAI GPT model name for categorization |
-| `OPENAI_API_KEY`       | OpenAI API key for LLM-based features    |
+| Variable               | Description                       |
+| ---------------------- | --------------------------------- |
+| `RSS_FEED_URLS`        | Comma-separated list of RSS URLs  |
+| `RSS_FEED_INTERVAL_MS` | Scraping interval in milliseconds |
+| `DATABASE_URL`         | PostgreSQL connection URL         |
+| `PORT`                 | Port for the REST API server      |
 
 ## Docker Setup
 
