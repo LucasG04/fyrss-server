@@ -76,7 +76,6 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 
 	r.Route("/api/articles", func(r chi.Router) {
 		r.Get("/", articleHandler.GetAll)
-		r.Get("/feed", articleHandler.GetFeed)
 		r.Get("/history", articleHandler.GetHistory)
 		r.Get("/saved", articleHandler.GetSaved)
 
@@ -96,7 +95,7 @@ func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService, articleS
 		r.Post("/", feedHandler.Create)
 		r.Put("/{id}", feedHandler.Update)
 		r.Delete("/{id}", feedHandler.Delete)
-		r.Get("/{feedId}/articles", articleHandler.GetByFeedID)
+		r.Get("/{feedId}/paginated", articleHandler.GetPaginatedByFeedID)
 	})
 }
 

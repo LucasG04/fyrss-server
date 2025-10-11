@@ -29,18 +29,6 @@ func (s *ArticleService) GetAll(ctx context.Context) ([]*model.Article, error) {
 	return articles, nil
 }
 
-func (s *ArticleService) GetByFeedID(ctx context.Context, feedID uuid.UUID) ([]*model.Article, error) {
-	if feedID == uuid.Nil {
-		return nil, fmt.Errorf("invalid feed ID: %s", feedID)
-	}
-
-	articles, err := s.repo.GetByFeedID(ctx, feedID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get articles for feed %s: %w", feedID, err)
-	}
-	return articles, nil
-}
-
 func (s *ArticleService) GetByID(ctx context.Context, id uuid.UUID) (*model.Article, error) {
 	article, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -49,15 +37,19 @@ func (s *ArticleService) GetByID(ctx context.Context, id uuid.UUID) (*model.Arti
 	return article, nil
 }
 
-func (s *ArticleService) GetFeedPaginated(ctx context.Context, from, to int) ([]*model.Article, error) {
-	fullFeed, err := s.repo.GetAllSortedByRecent(ctx)
+func (s *ArticleService) GetPaginatedByFeedID(ctx context.Context, feedID uuid.UUID, from, to int) ([]*model.Article, error) {
+	if feedID == uuid.Nil {
+		return nil, fmt.Errorf("invalid feed ID: %s", feedID)
+	}
+
+	fullFeed, err := s.repo.GetAllOfFeedSortedByRecent(ctx, feedID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feed: %w", err)
 	}
 	if len(fullFeed) == 0 {
 		return []*model.Article{}, nil // Return empty slice if no articles found
 	}
-	// adjust from & to params if articles length doesnt match
+	// adjust from & to params if articles length doesn't match
 	if from < 0 || to > len(fullFeed) || from >= to {
 		from = 0
 		to = len(fullFeed)
