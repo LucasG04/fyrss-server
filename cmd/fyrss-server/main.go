@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -17,7 +16,6 @@ import (
 	"github.com/lucasg04/fyrss-server/internal/handler"
 	"github.com/lucasg04/fyrss-server/internal/repository"
 	"github.com/lucasg04/fyrss-server/internal/service"
-	"github.com/openai/openai-go/v2"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -36,22 +34,20 @@ func main() {
 	defer db.Close()
 
 	// Initialize services
-	openAiClient := openai.NewClient() // retrieving api key defaults to os.LookupEnv("OPENAI_API_KEY")
-	aiService := service.NewAiService(&openAiClient)
-	tagRepo := repository.NewTagRepository(db)
-	tagService := service.NewTagService(tagRepo)
 	articleRepo := repository.NewArticleRepository(db)
-	articleService := service.NewArticleService(articleRepo, tagService, aiService)
+	articleService := service.NewArticleService(articleRepo)
+	feedRepo := repository.NewFeedRepository(db)
 	rssReader := service.NewRssArticleReader(articleService)
+	feedService := service.NewFeedService(feedRepo, rssReader, articleService)
 
 	runMigrations(databaseUrl)
-	go startReadingRssFeeds(rssReader, articleService)
+	go startReadingRssFeeds(feedService)
 	go startDeleteOldArticlesJob(articleService)
 
-	startServer(articleService, tagService)
+	startServer(articleService, feedService)
 }
 
-func startServer(articleService *service.ArticleService, tagService *service.TagService) {
+func startServer(articleService *service.ArticleService, feedService *service.FeedService) {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -62,7 +58,7 @@ func startServer(articleService *service.ArticleService, tagService *service.Tag
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	setupArticleHttpHandler(r, articleService)
-	setupTagHttpHandler(r, tagService)
+	setupFeedHttpHandler(r, feedService, articleService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -80,7 +76,6 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 
 	r.Route("/api/articles", func(r chi.Router) {
 		r.Get("/", articleHandler.GetAll)
-		r.Get("/feed", articleHandler.GetFeed)
 		r.Get("/history", articleHandler.GetHistory)
 		r.Get("/saved", articleHandler.GetSaved)
 
@@ -90,12 +85,17 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 	})
 }
 
-func setupTagHttpHandler(r *chi.Mux, tagService *service.TagService) {
-	tagHandler := handler.NewTagHandler(tagService)
+func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService, articleService *service.ArticleService) {
+	feedHandler := handler.NewFeedHandler(feedService)
+	articleHandler := handler.NewArticleHandler(articleService)
 
-	r.Route("/api/tags", func(r chi.Router) {
-		r.Get("/", tagHandler.GetAll)
-		r.Put("/", tagHandler.UpdateTag)
+	r.Route("/api/feeds", func(r chi.Router) {
+		r.Get("/", feedHandler.GetAll)
+		r.Get("/{id}", feedHandler.GetByID)
+		r.Post("/", feedHandler.Create)
+		r.Put("/{id}", feedHandler.Update)
+		r.Delete("/{id}", feedHandler.Delete)
+		r.Get("/{feedId}/paginated", articleHandler.GetPaginatedByFeedID)
 	})
 }
 
@@ -113,12 +113,7 @@ func runMigrations(dbUrl string) {
 	log.Println("Database migrations applied successfully")
 }
 
-func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService) {
-	feedUrlString := os.Getenv("RSS_FEED_URLS")
-	if feedUrlString == "" {
-		log.Fatal("RSS_FEED_URLS environment variable is not set")
-	}
-	feedUrls := strings.Split(feedUrlString, ",")
+func startReadingRssFeeds(feedService *service.FeedService) {
 	intervalInMs := os.Getenv("RSS_FEED_INTERVAL_MS")
 	if intervalInMs == "" {
 		intervalInMs = "7200000" // Default to 2 hours
@@ -128,47 +123,44 @@ func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *s
 		log.Fatalf("Invalid RSS_FEED_INTERVAL_MS: %s", intervalInMs)
 	}
 
-	fmt.Printf("Starting RSS feed reader with interval: %d ms and feeds: %v\n", interval, feedUrls)
+	fmt.Printf("Starting RSS feed reader with interval: %d ms\n", interval)
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 
-	processRssFeeds(rssReader, articleService, feedUrls) // Initial processing before starting the ticker
+	processRssFeeds(feedService) // Initial processing before starting the ticker
 	for range ticker.C {
-		processRssFeeds(rssReader, articleService, feedUrls)
+		processRssFeeds(feedService)
 	}
 }
 
-func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedUrls []string) {
-	skippedDuplicates := 0
-	savedArticles := 0
+func processRssFeeds(feedService *service.FeedService) {
+	// Get all feeds from database
+	feeds, err := feedService.GetAll(context.Background())
+	if err != nil {
+		log.Printf("Error getting feeds from database: %v\n", err)
+		return
+	}
+
+	if len(feeds) == 0 {
+		log.Println("No feeds configured in database")
+		return
+	}
+
+	fmt.Printf("Starting scheduled processing of %d feeds\n", len(feeds))
+
 	// TODO: add parallel processing for feeds
-	for _, feedUrl := range feedUrls {
+	for _, feed := range feeds {
 		// cancel article read after 30 seconds to avoid blocking
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
 
-		articles, err := rssReader.ReadArticleFeed(ctx, feedUrl)
-
+		err := feedService.ProcessFeedNow(ctx, feed)
 		if err != nil {
-			log.Printf("Error reading RSS feed from %s: %v\n", feedUrl, err)
-			return
+			log.Printf("Error processing RSS feed %s (%s): %v\n", feed.Name, feed.URL, err)
 		}
-		for _, article := range articles {
-			err := articleService.Save(context.Background(), article)
-			if err == service.ErrDuplicateArticle {
-				skippedDuplicates++
-				continue
-			}
-			if err != nil {
-				log.Printf("Error saving article %s: %v\n", article.Title, err)
-				continue
-			}
-			savedArticles++
-		}
+
+		cancel()
 	}
-	if skippedDuplicates > 0 {
-		log.Printf("Skipped %d duplicate articles\n", skippedDuplicates)
-	}
-	fmt.Printf("Finished processing RSS feeds. Saved %d new articles.\n", savedArticles)
+
+	fmt.Println("Finished scheduled RSS feed processing cycle")
 }
 
 func startDeleteOldArticlesJob(articleService *service.ArticleService) {

@@ -45,22 +45,6 @@ func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	handlerutil.JsonResponse(w, article)
 }
 
-func (h *ArticleHandler) GetFeed(w http.ResponseWriter, r *http.Request) {
-	from, to, err := getPaginationParams(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	articles, err := h.svc.GetFeedPaginated(r.Context(), from, to)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	handlerutil.JsonResponse(w, articles)
-}
-
 func (h *ArticleHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	from, to, err := getPaginationParams(r)
 	if err != nil {
@@ -131,6 +115,28 @@ func (h *ArticleHandler) UpdateReadByID(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *ArticleHandler) GetPaginatedByFeedID(w http.ResponseWriter, r *http.Request) {
+	feedIDStr := chi.URLParam(r, "feedId")
+	feedID, err := uuid.Parse(feedIDStr)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+	from, to, err := getPaginationParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	articles, err := h.svc.GetPaginatedByFeedID(r.Context(), feedID, from, to)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	handlerutil.JsonResponse(w, articles)
 }
 
 func getPaginationParams(r *http.Request) (int, int, error) {

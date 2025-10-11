@@ -41,14 +41,14 @@ func (r *ArticleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.A
 	return &article, nil
 }
 
-func (r *ArticleRepository) GetAllSortedByRecent(ctx context.Context) ([]*model.MinimalFeedArticle, error) {
+func (r *ArticleRepository) GetAllOfFeedSortedByRecent(ctx context.Context, feedID uuid.UUID) ([]*model.MinimalFeedArticle, error) {
 	query := `
 		SELECT id, description, published_at
 		FROM articles
-		WHERE last_read_at = $1
+		WHERE feed_id = $1
 		ORDER BY published_at DESC, id DESC`
 	var articles []*model.MinimalFeedArticle
-	err := r.db.SelectContext(ctx, &articles, query, model.DefaultNilTime)
+	err := r.db.SelectContext(ctx, &articles, query, feedID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all articles sorted by recent: %w", err)
 	}
@@ -127,8 +127,8 @@ func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string)
 
 func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) (*model.Article, error) {
 	query := `
-		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, published_at, last_read_at, save)
-		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :published_at, :last_read_at, :save)
+		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, published_at, last_read_at, save, feed_id)
+		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :published_at, :last_read_at, :save, :feed_id)
 		ON CONFLICT (id) DO NOTHING
 		RETURNING id`
 	var returnedID uuid.UUID
