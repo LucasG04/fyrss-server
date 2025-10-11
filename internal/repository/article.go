@@ -45,10 +45,10 @@ func (r *ArticleRepository) GetAllOfFeedSortedByRecent(ctx context.Context, feed
 	query := `
 		SELECT id, description, published_at
 		FROM articles
-		WHERE last_read_at = $1 AND feed_id = $2
+		WHERE feed_id = $1
 		ORDER BY published_at DESC, id DESC`
 	var articles []*model.MinimalFeedArticle
-	err := r.db.SelectContext(ctx, &articles, query, model.DefaultNilTime, feedID)
+	err := r.db.SelectContext(ctx, &articles, query, feedID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all articles sorted by recent: %w", err)
 	}
@@ -185,23 +185,4 @@ func (r *ArticleRepository) UpdateReadByID(ctx context.Context, id uuid.UUID) er
 		return fmt.Errorf("failed to update read status for article %s: %w", id, err)
 	}
 	return nil
-}
-
-// GetFeedPaginatedByFeedID retrieves paginated unread articles for a specific feed
-func (r *ArticleRepository) GetFeedPaginatedByFeedID(ctx context.Context, feedID uuid.UUID) ([]*model.MinimalFeedArticle, error) {
-	query := `
-		SELECT id, description, published_at
-		FROM articles
-		WHERE feed_id = $1 AND last_read_at = $2
-		ORDER BY published_at DESC, id DESC`
-	var articles []*model.MinimalFeedArticle
-	err := r.db.SelectContext(ctx, &articles, query, feedID, model.DefaultNilTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get feed articles by feed ID: %w", err)
-	}
-	// Ensure empty slice, not nil, if no results
-	if articles == nil {
-		articles = []*model.MinimalFeedArticle{}
-	}
-	return articles, nil
 }
