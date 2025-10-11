@@ -73,7 +73,9 @@ func TestValidateRSSFeed_NonExistentURL(t *testing.T) {
 func ExampleFeedService_Create_withValidation() {
 	// Mock repository for example - in real usage this would be a database
 	mockRepo := &repository.FeedRepository{}
-	feedService := NewFeedService(mockRepo)
+	mockRssReader := &RssArticleReader{}
+	mockArticleService := &ArticleService{}
+	feedService := NewFeedService(mockRepo, mockRssReader, mockArticleService)
 
 	req := &model.CreateFeedRequest{
 		Name: "Example RSS Feed",
@@ -81,7 +83,7 @@ func ExampleFeedService_Create_withValidation() {
 	}
 
 	ctx := context.Background()
-	
+
 	// This will:
 	// 1. Validate the name and URL format
 	// 2. Validate that the URL actually returns a valid RSS feed
@@ -92,7 +94,7 @@ func ExampleFeedService_Create_withValidation() {
 		// Handle validation errors or other issues
 		return
 	}
-	
+
 	// Feed was successfully created and validated
 	_ = feed
 }

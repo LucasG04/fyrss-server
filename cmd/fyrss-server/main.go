@@ -37,11 +37,11 @@ func main() {
 	articleRepo := repository.NewArticleRepository(db)
 	articleService := service.NewArticleService(articleRepo)
 	feedRepo := repository.NewFeedRepository(db)
-	feedService := service.NewFeedService(feedRepo)
 	rssReader := service.NewRssArticleReader(articleService)
+	feedService := service.NewFeedService(feedRepo, rssReader, articleService)
 
 	runMigrations(databaseUrl)
-	go startReadingRssFeeds(rssReader, articleService, feedService)
+	go startReadingRssFeeds(feedService)
 	go startDeleteOldArticlesJob(articleService)
 
 	startServer(articleService, feedService)
@@ -113,7 +113,7 @@ func runMigrations(dbUrl string) {
 	log.Println("Database migrations applied successfully")
 }
 
-func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedService *service.FeedService) {
+func startReadingRssFeeds(feedService *service.FeedService) {
 	intervalInMs := os.Getenv("RSS_FEED_INTERVAL_MS")
 	if intervalInMs == "" {
 		intervalInMs = "7200000" // Default to 2 hours
@@ -126,13 +126,13 @@ func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *s
 	fmt.Printf("Starting RSS feed reader with interval: %d ms\n", interval)
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 
-	processRssFeeds(rssReader, articleService, feedService) // Initial processing before starting the ticker
+	processRssFeeds(feedService) // Initial processing before starting the ticker
 	for range ticker.C {
-		processRssFeeds(rssReader, articleService, feedService)
+		processRssFeeds(feedService)
 	}
 }
 
-func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedService *service.FeedService) {
+func processRssFeeds(feedService *service.FeedService) {
 	// Get all feeds from database
 	feeds, err := feedService.GetAll(context.Background())
 	if err != nil {
@@ -145,37 +145,22 @@ func processRssFeeds(rssReader *service.RssArticleReader, articleService *servic
 		return
 	}
 
-	skippedDuplicates := 0
-	savedArticles := 0
+	fmt.Printf("Starting scheduled processing of %d feeds\n", len(feeds))
+
 	// TODO: add parallel processing for feeds
 	for _, feed := range feeds {
 		// cancel article read after 30 seconds to avoid blocking
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
 
-		articles, err := rssReader.ReadFeed(ctx, feed)
-
+		err := feedService.ProcessFeedNow(ctx, feed)
 		if err != nil {
-			log.Printf("Error reading RSS feed from %s: %v\n", feed.URL, err)
-			continue
+			log.Printf("Error processing RSS feed %s (%s): %v\n", feed.Name, feed.URL, err)
 		}
-		for _, article := range articles {
-			err := articleService.Save(context.Background(), article)
-			if err == service.ErrDuplicateArticle {
-				skippedDuplicates++
-				continue
-			}
-			if err != nil {
-				log.Printf("Error saving article %s: %v\n", article.Title, err)
-				continue
-			}
-			savedArticles++
-		}
+
+		cancel()
 	}
-	if skippedDuplicates > 0 {
-		log.Printf("Skipped %d duplicate articles\n", skippedDuplicates)
-	}
-	fmt.Printf("Finished processing RSS feeds. Saved %d new articles.\n", savedArticles)
+
+	fmt.Println("Finished scheduled RSS feed processing cycle")
 }
 
 func startDeleteOldArticlesJob(articleService *service.ArticleService) {

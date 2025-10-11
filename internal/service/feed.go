@@ -24,11 +24,17 @@ var (
 )
 
 type FeedService struct {
-	repo *repository.FeedRepository
+	repo           *repository.FeedRepository
+	rssReader      *RssArticleReader
+	articleService *ArticleService
 }
 
-func NewFeedService(repo *repository.FeedRepository) *FeedService {
-	return &FeedService{repo: repo}
+func NewFeedService(repo *repository.FeedRepository, rssReader *RssArticleReader, articleService *ArticleService) *FeedService {
+	return &FeedService{
+		repo:           repo,
+		rssReader:      rssReader,
+		articleService: articleService,
+	}
 }
 
 func (s *FeedService) GetAll(ctx context.Context) ([]*model.Feed, error) {
@@ -84,6 +90,9 @@ func (s *FeedService) Create(ctx context.Context, req *model.CreateFeedRequest) 
 		return nil, fmt.Errorf("failed to create feed: %w", err)
 	}
 
+	// Automatically fetch and process the feed after creation
+	go s.processFeedAsync(context.Background(), createdFeed)
+
 	return createdFeed, nil
 }
 
@@ -119,6 +128,9 @@ func (s *FeedService) Update(ctx context.Context, id uuid.UUID, req *model.Updat
 	if err != nil {
 		return nil, fmt.Errorf("failed to update feed with ID %s: %w", id, err)
 	}
+
+	// Automatically fetch and process the feed after update
+	go s.processFeedAsync(context.Background(), updatedFeed)
 
 	return updatedFeed, nil
 }
@@ -247,4 +259,68 @@ func (s *FeedService) validateRSSFeed(ctx context.Context, feedURL string) error
 	}
 
 	return nil
+}
+
+// processFeedAsync automatically processes a feed in the background
+// This method runs asynchronously to avoid blocking API responses
+func (s *FeedService) processFeedAsync(ctx context.Context, feed *model.Feed) {
+	// Set a timeout for feed processing to avoid hanging
+	processCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	err := s.ProcessFeedNow(processCtx, feed)
+	if err != nil {
+		// Log error but don't fail the API response since this is async
+		fmt.Printf("Background feed processing failed for feed %s (%s): %v\n", feed.Name, feed.URL, err)
+	}
+}
+
+// ProcessFeedNow immediately fetches and processes articles from a feed
+func (s *FeedService) ProcessFeedNow(ctx context.Context, feed *model.Feed) error {
+	if feed == nil {
+		return fmt.Errorf("feed cannot be nil")
+	}
+
+	// Read articles from the feed
+	articles, err := s.rssReader.ReadFeed(ctx, feed)
+	if err != nil {
+		return fmt.Errorf("failed to read feed %s: %w", feed.URL, err)
+	}
+
+	if len(articles) == 0 {
+		return fmt.Errorf("no articles found in feed %s", feed.URL)
+	}
+
+	// Save articles to database
+	savedCount := 0
+	duplicateCount := 0
+
+	for _, article := range articles {
+		err := s.articleService.Save(ctx, article)
+		if err == ErrDuplicateArticle {
+			duplicateCount++
+			continue
+		}
+		if err != nil {
+			// Log individual article save errors but continue processing
+			fmt.Printf("Failed to save article '%s' from feed %s: %v\n", article.Title, feed.URL, err)
+			continue
+		}
+		savedCount++
+	}
+
+	fmt.Printf("Processed feed %s (%s): saved %d new articles, skipped %d duplicates\n",
+		feed.Name, feed.URL, savedCount, duplicateCount)
+
+	return nil
+}
+
+// ProcessFeedByID processes a feed by its ID
+func (s *FeedService) ProcessFeedByID(ctx context.Context, feedID uuid.UUID) error {
+	feed, err := s.GetByID(ctx, feedID)
+	if err != nil {
+		return fmt.Errorf("failed to get feed for processing: %w", err)
+	}
+
+	return s.ProcessFeedNow(ctx, feed)
 }
