@@ -29,6 +29,18 @@ func (s *ArticleService) GetAll(ctx context.Context) ([]*model.Article, error) {
 	return articles, nil
 }
 
+func (s *ArticleService) GetByFeedID(ctx context.Context, feedID uuid.UUID) ([]*model.Article, error) {
+	if feedID == uuid.Nil {
+		return nil, fmt.Errorf("invalid feed ID: %s", feedID)
+	}
+
+	articles, err := s.repo.GetByFeedID(ctx, feedID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get articles for feed %s: %w", feedID, err)
+	}
+	return articles, nil
+}
+
 func (s *ArticleService) GetByID(ctx context.Context, id uuid.UUID) (*model.Article, error) {
 	article, err := s.repo.GetByID(ctx, id)
 	if err != nil {

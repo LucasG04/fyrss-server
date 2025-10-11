@@ -58,7 +58,7 @@ func startServer(articleService *service.ArticleService, feedService *service.Fe
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	setupArticleHttpHandler(r, articleService)
-	setupFeedHttpHandler(r, feedService)
+	setupFeedHttpHandler(r, feedService, articleService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -86,15 +86,17 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 	})
 }
 
-func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService) {
+func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService, articleService *service.ArticleService) {
 	feedHandler := handler.NewFeedHandler(feedService)
+	articleHandler := handler.NewArticleHandler(articleService)
 
 	r.Route("/api/feeds", func(r chi.Router) {
 		r.Get("/", feedHandler.GetAll)
-		r.Post("/", feedHandler.Create)
 		r.Get("/{id}", feedHandler.GetByID)
+		r.Post("/", feedHandler.Create)
 		r.Put("/{id}", feedHandler.Update)
 		r.Delete("/{id}", feedHandler.Delete)
+		r.Get("/{feedId}/articles", articleHandler.GetByFeedID)
 	})
 }
 
@@ -132,14 +134,14 @@ func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *s
 }
 
 func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedService *service.FeedService) {
-	// Get feed URLs from database
-	feedUrls, err := feedService.GetAllURLs(context.Background())
+	// Get all feeds from database
+	feeds, err := feedService.GetAll(context.Background())
 	if err != nil {
-		log.Printf("Error getting feed URLs from database: %v\n", err)
+		log.Printf("Error getting feeds from database: %v\n", err)
 		return
 	}
 
-	if len(feedUrls) == 0 {
+	if len(feeds) == 0 {
 		log.Println("No feeds configured in database")
 		return
 	}
@@ -147,15 +149,15 @@ func processRssFeeds(rssReader *service.RssArticleReader, articleService *servic
 	skippedDuplicates := 0
 	savedArticles := 0
 	// TODO: add parallel processing for feeds
-	for _, feedUrl := range feedUrls {
+	for _, feed := range feeds {
 		// cancel article read after 30 seconds to avoid blocking
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		articles, err := rssReader.ReadArticleFeed(ctx, feedUrl)
+		articles, err := rssReader.ReadFeed(ctx, feed)
 
 		if err != nil {
-			log.Printf("Error reading RSS feed from %s: %v\n", feedUrl, err)
+			log.Printf("Error reading RSS feed from %s: %v\n", feed.URL, err)
 			continue
 		}
 		for _, article := range articles {

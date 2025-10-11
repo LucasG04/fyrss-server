@@ -133,6 +133,23 @@ func (h *ArticleHandler) UpdateReadByID(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *ArticleHandler) GetByFeedID(w http.ResponseWriter, r *http.Request) {
+	feedIDStr := chi.URLParam(r, "feedId")
+	feedID, err := uuid.Parse(feedIDStr)
+	if err != nil {
+		http.Error(w, "Invalid feed ID", http.StatusBadRequest)
+		return
+	}
+
+	articles, err := h.svc.GetByFeedID(r.Context(), feedID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	handlerutil.JsonResponse(w, articles)
+}
+
 func getPaginationParams(r *http.Request) (int, int, error) {
 	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")

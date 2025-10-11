@@ -149,6 +149,19 @@ func (s *FeedService) GetAllURLs(ctx context.Context) ([]string, error) {
 	return urls, nil
 }
 
+// GetByURL retrieves a feed by its URL
+func (s *FeedService) GetByURL(ctx context.Context, url string) (*model.Feed, error) {
+	if strings.TrimSpace(url) == "" {
+		return nil, fmt.Errorf("URL cannot be empty")
+	}
+
+	feed, err := s.repo.GetByURL(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feed with URL %s: %w", url, err)
+	}
+	return feed, nil
+}
+
 // ValidateFeedURL provides a way to validate an RSS feed URL without creating a feed
 // This can be useful for testing or admin purposes
 func (s *FeedService) ValidateFeedURL(ctx context.Context, feedURL string) error {

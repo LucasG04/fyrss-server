@@ -18,19 +18,19 @@ func NewRssArticleReader(articleService *ArticleService) *RssArticleReader {
 	return &RssArticleReader{articleService: articleService}
 }
 
-func (r *RssArticleReader) ReadArticleFeed(ctx context.Context, feedURL string) ([]*model.Article, error) {
+func (r *RssArticleReader) ReadFeed(ctx context.Context, feed *model.Feed) ([]*model.Article, error) {
 	fp := gofeed.NewParser()
-	feed, err := fp.ParseURL(feedURL)
+	rssFeed, err := fp.ParseURL(feed.URL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse feed URL %s: %w", feedURL, err)
+		return nil, fmt.Errorf("failed to parse feed URL %s: %w", feed.URL, err)
 	}
-	if feed == nil || len(feed.Items) == 0 {
-		return nil, fmt.Errorf("no elements found in feed URL %s", feedURL)
+	if rssFeed == nil || len(rssFeed.Items) == 0 {
+		return nil, fmt.Errorf("no elements found in feed URL %s", feed.URL)
 	}
 
-	feedLength := len(feed.Items)
+	feedLength := len(rssFeed.Items)
 	articles := make([]*model.Article, feedLength)
-	for i, item := range feed.Items {
+	for i, item := range rssFeed.Items {
 		articles[i] = &model.Article{
 			ID:          uuid.New(),
 			Title:       item.Title,
@@ -40,6 +40,7 @@ func (r *RssArticleReader) ReadArticleFeed(ctx context.Context, feedURL string) 
 			PublishedAt: *item.PublishedParsed,
 			SourceType:  "rss",
 			Save:        false,
+			FeedID:      &feed.ID, // Associate with feed if provided
 		}
 	}
 

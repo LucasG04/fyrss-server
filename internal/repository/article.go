@@ -127,8 +127,8 @@ func (r *ArticleRepository) IsDuplicate(ctx context.Context, contentHash string)
 
 func (r *ArticleRepository) Save(ctx context.Context, article *model.Article) (*model.Article, error) {
 	query := `
-		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, published_at, last_read_at, save)
-		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :published_at, :last_read_at, :save)
+		INSERT INTO articles (id, title, description, content_hash, source_url, source_type, published_at, last_read_at, save, feed_id)
+		VALUES (:id, :title, :description, :content_hash, :source_url, :source_type, :published_at, :last_read_at, :save, :feed_id)
 		ON CONFLICT (id) DO NOTHING
 		RETURNING id`
 	var returnedID uuid.UUID
@@ -185,4 +185,38 @@ func (r *ArticleRepository) UpdateReadByID(ctx context.Context, id uuid.UUID) er
 		return fmt.Errorf("failed to update read status for article %s: %w", id, err)
 	}
 	return nil
+}
+
+// GetByFeedID retrieves all articles for a specific feed
+func (r *ArticleRepository) GetByFeedID(ctx context.Context, feedID uuid.UUID) ([]*model.Article, error) {
+	query := "SELECT * FROM articles WHERE feed_id = $1 ORDER BY published_at DESC"
+	var articles []*model.Article
+	err := r.db.SelectContext(ctx, &articles, query, feedID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get articles by feed ID: %w", err)
+	}
+	// Ensure empty slice, not nil, if no results
+	if articles == nil {
+		articles = []*model.Article{}
+	}
+	return articles, nil
+}
+
+// GetFeedPaginatedByFeedID retrieves paginated unread articles for a specific feed
+func (r *ArticleRepository) GetFeedPaginatedByFeedID(ctx context.Context, feedID uuid.UUID) ([]*model.MinimalFeedArticle, error) {
+	query := `
+		SELECT id, description, published_at
+		FROM articles
+		WHERE feed_id = $1 AND last_read_at = $2
+		ORDER BY published_at DESC, id DESC`
+	var articles []*model.MinimalFeedArticle
+	err := r.db.SelectContext(ctx, &articles, query, feedID, model.DefaultNilTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feed articles by feed ID: %w", err)
+	}
+	// Ensure empty slice, not nil, if no results
+	if articles == nil {
+		articles = []*model.MinimalFeedArticle{}
+	}
+	return articles, nil
 }

@@ -1,10 +1,21 @@
 # Feed Management API
 
-The Feed Management API allows you to manage RSS feed URLs through HTTP endpoints. **New feature**: The API now validates that URLs actually return valid RSS/Atom feeds before saving them.
+The Feed Management API allows you to manage RSS feed URLs through HTTP endpoints. **New features**:
+
+- The API now validates that URLs actually return valid RSS/Atom feeds before saving them
+- **Feed-Article Relationship**: Articles are now linked to their source feeds (1:m relationship)
 
 ## Base URL
 
 All endpoints are available under `/api/feeds`
+
+## Feed-Article Relationship
+
+- Each feed can have multiple articles (1:m relationship)
+- Articles include a `feedId` field that links them to their source feed
+- New articles automatically get associated with their source feed during RSS processing
+- Old articles (created before feeds) will have `feedId: null`
+- When a feed is deleted, associated articles remain but their `feedId` is set to `null`
 
 ## RSS Feed Validation
 
@@ -85,6 +96,27 @@ Update an existing feed.
 
 **Validation:** The URL will be validated to ensure it returns a valid RSS/Atom feed.
 
+### GET /api/feeds/{feedId}/articles
+
+Get all articles for a specific feed.
+
+**Response:** Array of article objects
+
+```json
+[
+  {
+    "id": "456e7890-e89b-12d3-a456-426614174000",
+    "title": "Example Article",
+    "description": "Article description...",
+    "sourceUrl": "https://example.com/article",
+    "sourceType": "rss",
+    "publishedAt": "2023-10-11T10:00:00Z",
+    "save": false,
+    "feedId": "123e4567-e89b-12d3-a456-426614174000"
+  }
+]
+```
+
 ### DELETE /api/feeds/{id}
 
 Delete a feed.
@@ -109,6 +141,9 @@ curl -X POST http://localhost:8080/api/feeds \
 
 # Get a specific feed
 curl http://localhost:8080/api/feeds/{feed-id}
+
+# Get all articles for a specific feed
+curl http://localhost:8080/api/feeds/{feed-id}/articles
 
 # Update a feed (will validate RSS)
 curl -X PUT http://localhost:8080/api/feeds/{feed-id} \

@@ -111,3 +111,14 @@ func (r *FeedRepository) IsURLExists(ctx context.Context, url string, excludeID 
 	}
 	return count > 0, nil
 }
+
+// GetByURL retrieves a feed by its URL
+func (r *FeedRepository) GetByURL(ctx context.Context, url string) (*model.Feed, error) {
+	query := "SELECT * FROM feeds WHERE url = $1"
+	var feed model.Feed
+	err := r.db.GetContext(ctx, &feed, query, url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feed by URL: %w", err)
+	}
+	return &feed, nil
+}
