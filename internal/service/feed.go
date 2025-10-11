@@ -11,13 +11,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/lucasg04/fyrss-server/internal/model"
 	"github.com/lucasg04/fyrss-server/internal/repository"
+	"github.com/mmcdole/gofeed"
 )
 
 var (
-	ErrFeedNotFound     = errors.New("feed not found")
-	ErrDuplicateFeedURL = errors.New("feed URL already exists")
-	ErrInvalidFeedURL   = errors.New("invalid feed URL")
-	ErrInvalidFeedName  = errors.New("feed name cannot be empty")
+	ErrFeedNotFound       = errors.New("feed not found")
+	ErrDuplicateFeedURL   = errors.New("feed URL already exists")
+	ErrInvalidFeedURL     = errors.New("invalid feed URL")
+	ErrInvalidFeedName    = errors.New("feed name cannot be empty")
+	ErrInvalidRSSFeed     = errors.New("URL does not return a valid RSS/Atom feed")
+	ErrFeedValidationFail = errors.New("feed validation failed")
 )
 
 type FeedService struct {
@@ -53,6 +56,11 @@ func (s *FeedService) Create(ctx context.Context, req *model.CreateFeedRequest) 
 		return nil, err
 	}
 
+	// Validate that the URL actually returns a valid RSS feed
+	if err := s.validateRSSFeed(ctx, req.URL); err != nil {
+		return nil, err
+	}
+
 	// Check if URL already exists
 	exists, err := s.repo.IsURLExists(ctx, req.URL, nil)
 	if err != nil {
@@ -85,6 +93,11 @@ func (s *FeedService) Update(ctx context.Context, id uuid.UUID, req *model.Updat
 	}
 
 	if err := s.validateFeedRequest(req.Name, req.URL); err != nil {
+		return nil, err
+	}
+
+	// Validate that the URL actually returns a valid RSS feed
+	if err := s.validateRSSFeed(ctx, req.URL); err != nil {
 		return nil, err
 	}
 
@@ -136,6 +149,31 @@ func (s *FeedService) GetAllURLs(ctx context.Context) ([]string, error) {
 	return urls, nil
 }
 
+// ValidateFeedURL provides a way to validate an RSS feed URL without creating a feed
+// This can be useful for testing or admin purposes
+func (s *FeedService) ValidateFeedURL(ctx context.Context, feedURL string) error {
+	// First validate URL format
+	if strings.TrimSpace(feedURL) == "" {
+		return ErrInvalidFeedURL
+	}
+
+	parsedURL, err := url.Parse(feedURL)
+	if err != nil {
+		return ErrInvalidFeedURL
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return ErrInvalidFeedURL
+	}
+
+	if parsedURL.Host == "" {
+		return ErrInvalidFeedURL
+	}
+
+	// Then validate RSS feed
+	return s.validateRSSFeed(ctx, feedURL)
+}
+
 func (s *FeedService) validateFeedRequest(name, feedURL string) error {
 	// Validate name
 	if strings.TrimSpace(name) == "" {
@@ -158,6 +196,41 @@ func (s *FeedService) validateFeedRequest(name, feedURL string) error {
 
 	if parsedURL.Host == "" {
 		return ErrInvalidFeedURL
+	}
+
+	return nil
+}
+
+// validateRSSFeed checks if the given URL returns a valid RSS/Atom feed
+func (s *FeedService) validateRSSFeed(ctx context.Context, feedURL string) error {
+	// Create a context with timeout for the RSS validation
+	validateCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Use gofeed parser to attempt to parse the feed
+	fp := gofeed.NewParser()
+	fp.UserAgent = "Fyrss-Server/1.0 (+https://github.com/LucasG04/fyrss-server)"
+
+	// Parse the feed URL with context
+	feed, err := fp.ParseURLWithContext(feedURL, validateCtx)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidRSSFeed, err)
+	}
+
+	// Check if we got a valid feed response
+	if feed == nil {
+		return fmt.Errorf("%w: feed is empty", ErrInvalidRSSFeed)
+	}
+
+	// Check if the feed has a title (basic requirement for valid feeds)
+	if strings.TrimSpace(feed.Title) == "" {
+		return fmt.Errorf("%w: feed has no title", ErrInvalidRSSFeed)
+	}
+
+	// Additional validation: ensure the feed has at least basic structure
+	// We don't require items as some feeds might be empty but still valid
+	if feed.FeedType == "" {
+		return fmt.Errorf("%w: unable to determine feed type", ErrInvalidRSSFeed)
 	}
 
 	return nil

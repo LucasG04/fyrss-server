@@ -4,7 +4,7 @@ A Go backend for automated curation of news and blog articles via RSS. Content i
 
 ## Features
 
-- Periodic fetching of RSS feeds
+- Periodic fetching of RSS feeds from database-managed sources
 - Duplicate detection via content hash
 - Storage of all content in an external PostgreSQL database
 - REST API for querying, filtering, and displaying content

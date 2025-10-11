@@ -57,6 +57,8 @@ func (h *FeedHandler) Create(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case service.ErrInvalidFeedName, service.ErrInvalidFeedURL:
 			http.Error(w, err.Error(), http.StatusBadRequest)
+		case service.ErrInvalidRSSFeed, service.ErrFeedValidationFail:
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		case service.ErrDuplicateFeedURL:
 			http.Error(w, err.Error(), http.StatusConflict)
 		default:
@@ -87,6 +89,8 @@ func (h *FeedHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case service.ErrInvalidFeedName, service.ErrInvalidFeedURL:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case service.ErrInvalidRSSFeed, service.ErrFeedValidationFail:
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		case service.ErrDuplicateFeedURL:
 			http.Error(w, err.Error(), http.StatusConflict)
