@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,16 +36,18 @@ func main() {
 	// Initialize services
 	articleRepo := repository.NewArticleRepository(db)
 	articleService := service.NewArticleService(articleRepo)
+	feedRepo := repository.NewFeedRepository(db)
+	feedService := service.NewFeedService(feedRepo)
 	rssReader := service.NewRssArticleReader(articleService)
 
 	runMigrations(databaseUrl)
-	go startReadingRssFeeds(rssReader, articleService)
+	go startReadingRssFeeds(rssReader, articleService, feedService)
 	go startDeleteOldArticlesJob(articleService)
 
-	startServer(articleService)
+	startServer(articleService, feedService)
 }
 
-func startServer(articleService *service.ArticleService) {
+func startServer(articleService *service.ArticleService, feedService *service.FeedService) {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -57,6 +58,7 @@ func startServer(articleService *service.ArticleService) {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	setupArticleHttpHandler(r, articleService)
+	setupFeedHttpHandler(r, feedService)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -84,6 +86,18 @@ func setupArticleHttpHandler(r *chi.Mux, articleService *service.ArticleService)
 	})
 }
 
+func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService) {
+	feedHandler := handler.NewFeedHandler(feedService)
+
+	r.Route("/api/feeds", func(r chi.Router) {
+		r.Get("/", feedHandler.GetAll)
+		r.Post("/", feedHandler.Create)
+		r.Get("/{id}", feedHandler.GetByID)
+		r.Put("/{id}", feedHandler.Update)
+		r.Delete("/{id}", feedHandler.Delete)
+	})
+}
+
 func runMigrations(dbUrl string) {
 	m, err := migrate.New(
 		"file://db/migrations", dbUrl,
@@ -98,12 +112,7 @@ func runMigrations(dbUrl string) {
 	log.Println("Database migrations applied successfully")
 }
 
-func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService) {
-	feedUrlString := os.Getenv("RSS_FEED_URLS")
-	if feedUrlString == "" {
-		log.Fatal("RSS_FEED_URLS environment variable is not set")
-	}
-	feedUrls := strings.Split(feedUrlString, ",")
+func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedService *service.FeedService) {
 	intervalInMs := os.Getenv("RSS_FEED_INTERVAL_MS")
 	if intervalInMs == "" {
 		intervalInMs = "7200000" // Default to 2 hours
@@ -113,16 +122,28 @@ func startReadingRssFeeds(rssReader *service.RssArticleReader, articleService *s
 		log.Fatalf("Invalid RSS_FEED_INTERVAL_MS: %s", intervalInMs)
 	}
 
-	fmt.Printf("Starting RSS feed reader with interval: %d ms and feeds: %v\n", interval, feedUrls)
+	fmt.Printf("Starting RSS feed reader with interval: %d ms\n", interval)
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 
-	processRssFeeds(rssReader, articleService, feedUrls) // Initial processing before starting the ticker
+	processRssFeeds(rssReader, articleService, feedService) // Initial processing before starting the ticker
 	for range ticker.C {
-		processRssFeeds(rssReader, articleService, feedUrls)
+		processRssFeeds(rssReader, articleService, feedService)
 	}
 }
 
-func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedUrls []string) {
+func processRssFeeds(rssReader *service.RssArticleReader, articleService *service.ArticleService, feedService *service.FeedService) {
+	// Get feed URLs from database
+	feedUrls, err := feedService.GetAllURLs(context.Background())
+	if err != nil {
+		log.Printf("Error getting feed URLs from database: %v\n", err)
+		return
+	}
+
+	if len(feedUrls) == 0 {
+		log.Println("No feeds configured in database")
+		return
+	}
+
 	skippedDuplicates := 0
 	savedArticles := 0
 	// TODO: add parallel processing for feeds
@@ -135,7 +156,7 @@ func processRssFeeds(rssReader *service.RssArticleReader, articleService *servic
 
 		if err != nil {
 			log.Printf("Error reading RSS feed from %s: %v\n", feedUrl, err)
-			return
+			continue
 		}
 		for _, article := range articles {
 			err := articleService.Save(context.Background(), article)

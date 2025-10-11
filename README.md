@@ -15,7 +15,6 @@ A Go backend for automated curation of news and blog articles via RSS. Content i
 
 | Variable               | Description                       |
 | ---------------------- | --------------------------------- |
-| `RSS_FEED_URLS`        | Comma-separated list of RSS URLs  |
 | `RSS_FEED_INTERVAL_MS` | Scraping interval in milliseconds |
 | `DATABASE_URL`         | PostgreSQL connection URL         |
 | `PORT`                 | Port for the REST API server      |
