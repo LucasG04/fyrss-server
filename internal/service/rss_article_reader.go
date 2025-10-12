@@ -20,7 +20,7 @@ func NewRssArticleReader(articleService *ArticleService) *RssArticleReader {
 
 func (r *RssArticleReader) ReadFeed(ctx context.Context, feed *model.Feed) ([]*model.Article, error) {
 	fp := gofeed.NewParser()
-	rssFeed, err := fp.ParseURL(feed.URL)
+	rssFeed, err := fp.ParseURLWithContext(feed.URL, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse feed URL %s: %w", feed.URL, err)
 	}
