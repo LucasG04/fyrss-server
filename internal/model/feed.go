@@ -7,11 +7,12 @@ import (
 )
 
 type Feed struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	Name      string    `json:"name" db:"name"`
-	URL       string    `json:"url" db:"url"`
-	CreatedAt time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
+	ID           uuid.UUID `json:"id" db:"id"`
+	Name         string    `json:"name" db:"name"`
+	URL          string    `json:"url" db:"url"`
+	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt    time.Time `json:"updatedAt" db:"updated_at"`
+	ArticleCount int       `json:"articleCount" db:"-"`
 }
 
 type CreateFeedRequest struct {

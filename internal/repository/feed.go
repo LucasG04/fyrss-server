@@ -10,11 +10,15 @@ import (
 )
 
 type FeedRepository struct {
-	db *sqlx.DB
+	db          *sqlx.DB
+	articleRepo *ArticleRepository
 }
 
 func NewFeedRepository(db *sqlx.DB) *FeedRepository {
-	return &FeedRepository{db: db}
+	return &FeedRepository{
+		db:          db,
+		articleRepo: NewArticleRepository(db),
+	}
 }
 
 func (r *FeedRepository) GetAll(ctx context.Context) ([]*model.Feed, error) {
@@ -28,6 +32,16 @@ func (r *FeedRepository) GetAll(ctx context.Context) ([]*model.Feed, error) {
 	if feeds == nil {
 		feeds = []*model.Feed{}
 	}
+
+	// Populate article count for each feed
+	for _, feed := range feeds {
+		count, err := r.articleRepo.CountByFeedID(ctx, feed.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get article count for feed %s: %w", feed.ID, err)
+		}
+		feed.ArticleCount = count
+	}
+
 	return feeds, nil
 }
 
@@ -38,6 +52,14 @@ func (r *FeedRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Feed
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feed by ID: %w", err)
 	}
+
+	// Populate article count
+	count, err := r.articleRepo.CountByFeedID(ctx, feed.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get article count for feed %s: %w", feed.ID, err)
+	}
+	feed.ArticleCount = count
+
 	return &feed, nil
 }
 
@@ -57,6 +79,8 @@ func (r *FeedRepository) Create(ctx context.Context, feed *model.Feed) (*model.F
 			return nil, fmt.Errorf("failed to scan returned id: %w", err)
 		}
 		feed.ID = returnedID
+		feed.ArticleCount = 0
+
 		return feed, nil
 	}
 	return nil, fmt.Errorf("failed to create feed: no ID returned")
@@ -73,6 +97,14 @@ func (r *FeedRepository) Update(ctx context.Context, id uuid.UUID, feed *model.F
 	if err != nil {
 		return nil, fmt.Errorf("failed to update feed with ID %s: %w", id, err)
 	}
+
+	// Populate article count
+	count, err := r.articleRepo.CountByFeedID(ctx, updatedFeed.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get article count for updated feed %s: %w", updatedFeed.ID, err)
+	}
+	updatedFeed.ArticleCount = count
+
 	return &updatedFeed, nil
 }
 
@@ -110,15 +142,4 @@ func (r *FeedRepository) IsURLExists(ctx context.Context, url string, excludeID 
 		return false, fmt.Errorf("failed to check if feed URL exists: %w", err)
 	}
 	return count > 0, nil
-}
-
-// GetByURL retrieves a feed by its URL
-func (r *FeedRepository) GetByURL(ctx context.Context, url string) (*model.Feed, error) {
-	query := "SELECT * FROM feeds WHERE url = $1"
-	var feed model.Feed
-	err := r.db.GetContext(ctx, &feed, query, url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get feed by URL: %w", err)
-	}
-	return &feed, nil
 }

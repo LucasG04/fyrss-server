@@ -186,3 +186,13 @@ func (r *ArticleRepository) UpdateReadByID(ctx context.Context, id uuid.UUID) er
 	}
 	return nil
 }
+
+func (r *ArticleRepository) CountByFeedID(ctx context.Context, feedID uuid.UUID) (int, error) {
+	query := "SELECT COUNT(*) FROM articles WHERE feed_id = $1"
+	var count int
+	err := r.db.GetContext(ctx, &count, query, feedID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count articles for feed %s: %w", feedID, err)
+	}
+	return count, nil
+}
