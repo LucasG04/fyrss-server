@@ -30,7 +30,8 @@ func (h *ArticleHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ArticleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := handlerutil.GetRequestParamUUID(r)
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, "Invalid article ID", http.StatusBadRequest)
 		return
