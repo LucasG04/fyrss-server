@@ -2,6 +2,8 @@
 
 A Go backend for automated curation of news and blog articles via RSS. Content is categorized, prioritized, and made accessible via a REST API. The backend is fully stateless and uses an external database (e.g., PostgreSQL in a container).
 
+For further information see [LucasG04/fyrss-web/wiki](https://github.com/LucasG04/fyrss-web/wiki).
+
 ## Features
 
 - Periodic fetching of RSS feeds from database-managed sources
@@ -18,7 +20,3 @@ A Go backend for automated curation of news and blog articles via RSS. Content i
 | `RSS_FEED_INTERVAL_MS` | Scraping interval in milliseconds |
 | `DATABASE_URL`         | PostgreSQL connection URL         |
 | `PORT`                 | Port for the REST API server      |
-
-## Docker Setup
-
-TODO
