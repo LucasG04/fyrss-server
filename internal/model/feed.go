@@ -12,6 +12,7 @@ type Feed struct {
 	URL          string    `json:"url" db:"url"`
 	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt    time.Time `json:"updatedAt" db:"updated_at"`
+	LastReadAt   time.Time `json:"lastReadAt" db:"last_read_at"`
 	ArticleCount int       `json:"articleCount" db:"-"`
 }
 

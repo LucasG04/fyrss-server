@@ -95,6 +95,7 @@ func setupFeedHttpHandler(r *chi.Mux, feedService *service.FeedService, articleS
 		r.Post("/", feedHandler.Create)
 		r.Put("/{id}", feedHandler.Update)
 		r.Delete("/{id}", feedHandler.Delete)
+		r.Patch("/{id}/read", feedHandler.UpdateLastReadAt)
 		r.Get("/{feedId}/paginated", articleHandler.GetPaginatedByFeedID)
 	})
 }

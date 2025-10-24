@@ -78,11 +78,12 @@ func (s *FeedService) Create(ctx context.Context, req *model.CreateFeedRequest) 
 
 	now := time.Now()
 	feed := &model.Feed{
-		ID:        uuid.New(),
-		Name:      strings.TrimSpace(req.Name),
-		URL:       strings.TrimSpace(req.URL),
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:         uuid.New(),
+		Name:       strings.TrimSpace(req.Name),
+		URL:        strings.TrimSpace(req.URL),
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		LastReadAt: now,
 	}
 
 	createdFeed, err := s.repo.Create(ctx, feed)
@@ -310,4 +311,19 @@ func (s *FeedService) ProcessFeedByID(ctx context.Context, feedID uuid.UUID) err
 	}
 
 	return s.ProcessFeedNow(ctx, feed)
+}
+
+// UpdateLastReadAt updates the last read timestamp for a feed
+func (s *FeedService) UpdateLastReadAt(ctx context.Context, feedID uuid.UUID) error {
+	if feedID == uuid.Nil {
+		return fmt.Errorf("invalid feed ID: %s", feedID)
+	}
+
+	now := time.Now()
+	err := s.repo.UpdateLastReadAt(ctx, feedID, now)
+	if err != nil {
+		return fmt.Errorf("failed to update last read at for feed %s: %w", feedID, err)
+	}
+
+	return nil
 }

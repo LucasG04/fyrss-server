@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -65,8 +66,8 @@ func (r *FeedRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Feed
 
 func (r *FeedRepository) Create(ctx context.Context, feed *model.Feed) (*model.Feed, error) {
 	query := `
-		INSERT INTO feeds (id, name, url, created_at, updated_at)
-		VALUES (:id, :name, :url, :created_at, :updated_at)
+		INSERT INTO feeds (id, name, url, created_at, updated_at, last_read_at)
+		VALUES (:id, :name, :url, :created_at, :updated_at, :last_read_at)
 		RETURNING id`
 	var returnedID uuid.UUID
 	rows, err := r.db.NamedQueryContext(ctx, query, feed)
@@ -91,7 +92,7 @@ func (r *FeedRepository) Update(ctx context.Context, id uuid.UUID, feed *model.F
 		UPDATE feeds
 		SET name = $2, url = $3, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, name, url, created_at, updated_at`
+		RETURNING id, name, url, created_at, updated_at, last_read_at`
 	var updatedFeed model.Feed
 	err := r.db.GetContext(ctx, &updatedFeed, query, id, feed.Name, feed.URL)
 	if err != nil {
@@ -120,6 +121,25 @@ func (r *FeedRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("feed with ID %s not found", id)
+	}
+	return nil
+}
+
+func (r *FeedRepository) UpdateLastReadAt(ctx context.Context, id uuid.UUID, lastReadAt time.Time) error {
+	query := `
+		UPDATE feeds
+		SET last_read_at = $2
+		WHERE id = $1`
+	result, err := r.db.ExecContext(ctx, query, id, lastReadAt)
+	if err != nil {
+		return fmt.Errorf("failed to update last read at for feed %s: %w", id, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected for last read at update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("feed with ID %s not found for last read at update", id)
 	}
 	return nil
 }
